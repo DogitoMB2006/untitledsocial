@@ -52,12 +52,11 @@ const Navbar = () => {
     <header className="border-b border-slate-800/80 bg-slate-950/80 backdrop-blur relative z-50">
       <nav className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         <Link to="/" className="inline-flex items-center gap-2">
-          <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-tr from-sky-500 to-blue-600 shadow-lg shadow-blue-600/40">
-            <span className="text-sm font-semibold">NX</span>
-          </span>
-          <span className="font-semibold tracking-tight text-slate-50">
-            NebulaX
-          </span>
+          <img
+            src="/orbyt-logo.png"
+            alt="Orbyt"
+            className="h-10 w-auto object-contain"
+          />
         </Link>
         {!user ? (
           <div className="flex items-center gap-2 sm:gap-3">
