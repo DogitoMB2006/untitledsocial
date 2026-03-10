@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Button from '../../components/ui/Button'
 import Card from '../../components/ui/Card'
 import SectionTitle from '../../components/ui/SectionTitle'
 import { useAuth } from '../../context/AuthContext'
 import { createPost, fetchRecentPosts, type Post } from '../../lib/posts'
+import { uploadImages } from '../../lib/storage'
 import PostCard from '../../components/feed/PostCard'
 
 const marketingHome = () => (
@@ -104,9 +105,12 @@ const Home = () => {
   const { user } = useAuth()
 
   const [content, setContent] = useState('')
+  const [files, setFiles] = useState<File[]>([])
   const [posts, setPosts] = useState<Post[]>([])
   const [isLoadingPosts, setIsLoadingPosts] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const maxPostImages = 4
 
   useEffect(() => {
     if (!user) return
@@ -134,9 +138,15 @@ const Home = () => {
     if (trimmed.length > 280) return
 
     try {
-      const newPost = await createPost(user.id, trimmed)
+      let imageUrls: string[] = []
+      if (files.length > 0) {
+        imageUrls = await uploadImages(files, 'posts')
+      }
+
+      const newPost = await createPost(user.id, trimmed, imageUrls)
       setPosts((current) => [newPost, ...current])
       setContent('')
+      setFiles([])
     } catch (err) {
       const message =
         err instanceof Error ? err.message : 'Failed to create post.'
@@ -166,15 +176,71 @@ const Home = () => {
           className="w-full resize-none rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2 text-sm text-slate-50 placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
           rows={3}
         />
-        <div className="flex items-center justify-between text-[11px] text-slate-500">
-          <span>{content.length}/280</span>
-          <Button
-            size="sm"
-            onClick={handlePost}
-            disabled={!content.trim() || content.length > 280}
-          >
-            Post
-          </Button>
+        <div className="space-y-2 text-[11px] text-slate-500">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-700 bg-slate-900/70 text-sky-300 hover:border-sky-500 hover:text-sky-200 transition-colors"
+                aria-label="Add images"
+              >
+                +
+              </button>
+              <span className="hidden sm:inline text-slate-400">
+                {files.length}/{maxPostImages} images
+              </span>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={(event) => {
+                  const selected = Array.from(event.target.files ?? [])
+                  const next = [...files, ...selected].slice(0, maxPostImages)
+                  setFiles(next)
+                }}
+              />
+            </div>
+            <span>{content.length}/280</span>
+          </div>
+          {files.length > 0 ? (
+            <div className="flex gap-2 overflow-x-auto">
+              {files.map((file, index) => {
+                const url = URL.createObjectURL(file)
+                return (
+                  <div
+                    key={`${file.name}-${index}`}
+                    className="h-16 w-16 rounded-xl overflow-hidden border border-slate-700/80 bg-slate-900/70"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={url}
+                      alt={file.name}
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
+                )
+              })}
+            </div>
+          ) : null}
+          <div className="flex items-center justify-between">
+            <span className="sm:hidden">
+              {files.length}/{maxPostImages} images
+            </span>
+            <Button
+              size="sm"
+              onClick={handlePost}
+              disabled={
+                !content.trim() ||
+                content.length > 280 ||
+                files.length > maxPostImages
+              }
+            >
+              Post
+            </Button>
+          </div>
         </div>
       </Card>
 
@@ -189,7 +255,13 @@ const Home = () => {
       ) : (
         <div className="space-y-3">
           {posts.map((post) => (
-            <PostCard key={post.id} post={post} />
+            <PostCard
+              key={post.id}
+              post={post}
+              onDeleted={(id) =>
+                setPosts((current) => current.filter((p) => p.id !== id))
+              }
+            />
           ))}
         </div>
       )}

@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Comment, Post } from '../../lib/posts'
 import {
   createComment,
+  deletePost,
   fetchComments,
   fetchLikeState,
   likePost,
@@ -10,12 +11,16 @@ import {
 import Card from '../ui/Card'
 import Button from '../ui/Button'
 import { useAuth } from '../../context/AuthContext'
+import ImageGrid from '../media/ImageGrid'
+import ImageModal from '../media/ImageModal'
+import { uploadImages } from '../../lib/storage'
 
 interface PostCardProps {
   post: Post
+  onDeleted?: (id: string) => void
 }
 
-const PostCard = ({ post }: PostCardProps) => {
+const PostCard = ({ post, onDeleted }: PostCardProps) => {
   const { user } = useAuth()
   const [liked, setLiked] = useState(false)
   const [likes, setLikes] = useState(0)
@@ -24,6 +29,12 @@ const PostCard = ({ post }: PostCardProps) => {
   const [isLoadingComments, setIsLoadingComments] = useState(false)
   const [commentInput, setCommentInput] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [commentFiles, setCommentFiles] = useState<File[]>([])
+  const commentFileInputRef = useRef<HTMLInputElement | null>(null)
+  const [replyToCommentId, setReplyToCommentId] = useState<string | null>(null)
+  const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null)
+  const [modalUrls, setModalUrls] = useState<string[] | null>(null)
+  const maxCommentImages = 2
 
   const authorName = post.profiles?.display_name ?? post.profiles?.username ?? 'User'
   const handle = post.profiles?.username ? `@${post.profiles.username}` : ''
@@ -121,13 +132,43 @@ const PostCard = ({ post }: PostCardProps) => {
                 </p>
               ) : null}
             </div>
-            <p className="text-[10px] text-slate-500 shrink-0">
-              {new Date(post.created_at).toLocaleTimeString()}
-            </p>
+            <div className="flex items-center gap-2 shrink-0">
+              <p className="text-[10px] text-slate-500">
+                {new Date(post.created_at).toLocaleTimeString()}
+              </p>
+              {user?.id === post.user_id ? (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await deletePost(post.id, user.id)
+                      onDeleted?.(post.id)
+                    } catch (err) {
+                      const message =
+                        err instanceof Error ? err.message : 'Failed to delete post.'
+                      setError(message)
+                    }
+                  }}
+                  className="h-5 w-5 rounded-full border border-slate-700 text-[10px] text-slate-400 hover:border-red-500 hover:text-red-400 flex items-center justify-center transition-colors"
+                  aria-label="Delete post"
+                >
+                  ×
+                </button>
+              ) : null}
+            </div>
           </div>
           <p className="text-sm text-slate-100 whitespace-pre-wrap">
             {post.content}
           </p>
+          {post.image_urls?.length ? (
+            <ImageGrid
+              urls={post.image_urls}
+              onImageClick={(index) => {
+                setModalUrls(post.image_urls)
+                setSelectedImageIndex(index)
+              }}
+            />
+          ) : null}
         </div>
       </div>
 
@@ -177,56 +218,146 @@ const PostCard = ({ post }: PostCardProps) => {
             <p className="text-[11px] text-slate-500">
               Loading comments…
             </p>
-          ) : comments.length === 0 ? (
-            <p className="text-[11px] text-slate-500">
-              No comments yet. Start the conversation.
-            </p>
           ) : (
             <div className="space-y-1.5">
-              {comments.map((comment) => {
-                const commentAuthor =
-                  comment.profiles?.display_name ?? comment.profiles?.username ?? 'User'
-                const commentHandle = comment.profiles?.username
-                  ? `@${comment.profiles.username}`
-                  : ''
-                return (
-                  <div
-                    key={comment.id}
-                    className="flex gap-2 text-[11px]"
-                  >
-                    <div className="mt-0.5 h-6 w-6 rounded-full bg-slate-900 border border-slate-700 flex items-center justify-center text-[9px] text-slate-200 overflow-hidden">
-                      {comment.profiles?.avatar_url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={comment.profiles.avatar_url}
-                          alt={commentAuthor}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        (commentAuthor[0] ?? 'U').toUpperCase()
-                      )}
-                    </div>
-                    <div className="flex-1 space-y-0.5">
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-semibold text-slate-100">
-                          {commentAuthor}
-                        </span>
-                        {commentHandle ? (
-                          <span className="text-slate-500">
-                            {commentHandle}
-                          </span>
-                        ) : null}
-                        <span className="ml-auto text-[10px] text-slate-500">
-                          {new Date(comment.created_at).toLocaleTimeString()}
-                        </span>
+              {comments.length === 0 ? (
+                <p className="text-[11px] text-slate-500">
+                  No comments yet. Start the conversation.
+                </p>
+              ) : null}
+              {comments
+                .filter((comment) => !comment.parent_comment_id)
+                .map((comment) => {
+                  const replies = comments.filter(
+                    (reply) => reply.parent_comment_id === comment.id,
+                  )
+                  const commentAuthor =
+                    comment.profiles?.display_name ??
+                    comment.profiles?.username ??
+                    'User'
+                  const commentHandle = comment.profiles?.username
+                    ? `@${comment.profiles.username}`
+                    : ''
+                  return (
+                    <div
+                      key={comment.id}
+                      className="space-y-1.5"
+                    >
+                      <div className="flex gap-2 text-[11px]">
+                        <div className="mt-0.5 h-6 w-6 rounded-full bg-slate-900 border border-slate-700 flex items-center justify-center text-[9px] text-slate-200 overflow-hidden">
+                          {comment.profiles?.avatar_url ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={comment.profiles.avatar_url}
+                              alt={commentAuthor}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            (commentAuthor[0] ?? 'U').toUpperCase()
+                          )}
+                        </div>
+                        <div className="flex-1 space-y-0.5">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-semibold text-slate-100">
+                              {commentAuthor}
+                            </span>
+                            {commentHandle ? (
+                              <span className="text-slate-500">
+                                {commentHandle}
+                              </span>
+                            ) : null}
+                            <span className="ml-auto text-[10px] text-slate-500">
+                              {new Date(comment.created_at).toLocaleTimeString()}
+                            </span>
+                          </div>
+                          <p className="text-slate-100">
+                            {comment.content}
+                          </p>
+                          {comment.image_urls?.length ? (
+                            <ImageGrid
+                              urls={comment.image_urls}
+                              size="small"
+                              onImageClick={(index) => {
+                                setModalUrls(comment.image_urls)
+                                setSelectedImageIndex(index)
+                              }}
+                            />
+                          ) : null}
+                          <button
+                            type="button"
+                            className="mt-0.5 text-[10px] text-sky-400 hover:text-sky-300"
+                            onClick={() => {
+                              if (!user) return
+                              setReplyToCommentId(comment.id)
+                            }}
+                          >
+                            Reply
+                          </button>
+                        </div>
                       </div>
-                      <p className="text-slate-100">
-                        {comment.content}
-                      </p>
+                      {replies.length > 0 ? (
+                        <div className="space-y-1 border-l border-slate-800/80 pl-4 ml-3">
+                          {replies.map((reply) => {
+                            const replyAuthor =
+                              reply.profiles?.display_name ??
+                              reply.profiles?.username ??
+                              'User'
+                            const replyHandle = reply.profiles?.username
+                              ? `@${reply.profiles.username}`
+                              : ''
+                            return (
+                              <div
+                                key={reply.id}
+                                className="flex gap-2 text-[11px]"
+                              >
+                                <div className="mt-0.5 h-6 w-6 rounded-full bg-slate-900 border border-slate-700 flex items-center justify-center text-[9px] text-slate-200 overflow-hidden">
+                                  {reply.profiles?.avatar_url ? (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img
+                                      src={reply.profiles.avatar_url}
+                                      alt={replyAuthor}
+                                      className="h-full w-full object-cover"
+                                    />
+                                  ) : (
+                                    (replyAuthor[0] ?? 'U').toUpperCase()
+                                  )}
+                                </div>
+                                <div className="flex-1 space-y-0.5">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-semibold text-slate-100">
+                                      {replyAuthor}
+                                    </span>
+                                    {replyHandle ? (
+                                      <span className="text-slate-500">
+                                        {replyHandle}
+                                      </span>
+                                    ) : null}
+                                    <span className="ml-auto text-[10px] text-slate-500">
+                                      {new Date(reply.created_at).toLocaleTimeString()}
+                                    </span>
+                                  </div>
+                                  <p className="text-slate-100">
+                                    {reply.content}
+                                  </p>
+                                  {reply.image_urls?.length ? (
+                                    <ImageGrid
+                                      urls={reply.image_urls}
+                                      size="small"
+                                      onImageClick={(index) => {
+                                        setModalUrls(reply.image_urls)
+                                        setSelectedImageIndex(index)
+                                      }}
+                                    />
+                                  ) : null}
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      ) : null}
                     </div>
-                  </div>
-                )
-              })}
+                  )
+                })}
             </div>
           )}
           <div className="flex gap-2 pt-1">
@@ -238,6 +369,25 @@ const PostCard = ({ post }: PostCardProps) => {
               onChange={(event) => setCommentInput(event.target.value)}
               disabled={!user}
             />
+            <button
+              type="button"
+              className="text-[10px] text-sky-400 hover:text-sky-300 self-center"
+              onClick={() => commentFileInputRef.current?.click()}
+            >
+              Images
+            </button>
+            <input
+              ref={commentFileInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={(event) => {
+                const selected = Array.from(event.target.files ?? [])
+                const next = [...commentFiles, ...selected].slice(0, maxCommentImages)
+                setCommentFiles(next)
+              }}
+            />
             <Button
               size="sm"
               className="text-[11px] px-3"
@@ -246,10 +396,20 @@ const PostCard = ({ post }: PostCardProps) => {
                 if (!user) return
                 const trimmed = commentInput.trim()
                 if (!trimmed) return
+                if (trimmed.length > 280) return
                 try {
-                  const newComment = await createComment(post.id, user.id, trimmed)
+                  let imageUrls: string[] = []
+                  if (commentFiles.length > 0) {
+                    imageUrls = await uploadImages(commentFiles, 'comments')
+                  }
+                  const newComment = await createComment(post.id, user.id, trimmed, {
+                    parentCommentId: replyToCommentId ?? undefined,
+                    imageUrls,
+                  })
                   setComments((current) => [...current, newComment])
                   setCommentInput('')
+                  setCommentFiles([])
+                  setReplyToCommentId(null)
                 } catch (err) {
                   const message =
                     err instanceof Error ? err.message : 'Failed to add comment.'
@@ -260,7 +420,47 @@ const PostCard = ({ post }: PostCardProps) => {
               Reply
             </Button>
           </div>
+          {commentFiles.length > 0 ? (
+            <div className="flex gap-2 text-[10px] text-slate-400">
+              {commentFiles.map((file, index) => (
+                <div
+                  key={`${file.name}-${index}`}
+                  className="h-8 rounded-full border border-slate-700/80 bg-slate-900/70 px-2 flex items-center"
+                >
+                  {file.name}
+                </div>
+              ))}
+            </div>
+          ) : null}
         </div>
+      ) : null}
+      {selectedImageIndex !== null && modalUrls && modalUrls.length ? (
+        <ImageModal
+          urls={modalUrls}
+          index={selectedImageIndex}
+          onClose={() => {
+            setSelectedImageIndex(null)
+            setModalUrls(null)
+          }}
+          onPrev={() =>
+            setSelectedImageIndex((prev) =>
+              prev === null
+                ? 0
+                : prev === 0
+                  ? modalUrls.length - 1
+                  : prev - 1,
+            )
+          }
+          onNext={() =>
+            setSelectedImageIndex((prev) =>
+              prev === null
+                ? 0
+                : prev === modalUrls.length - 1
+                  ? 0
+                  : prev + 1,
+            )
+          }
+        />
       ) : null}
     </Card>
   )

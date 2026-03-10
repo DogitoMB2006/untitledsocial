@@ -11,6 +11,7 @@ export interface Post {
   user_id: string
   content: string
   created_at: string
+  image_urls: string[]
   profiles?: PostAuthor
 }
 
@@ -20,6 +21,8 @@ export interface Comment {
   user_id: string
   content: string
   created_at: string
+  parent_comment_id: string | null
+  image_urls: string[]
   profiles?: PostAuthor
 }
 
@@ -31,9 +34,7 @@ export interface LikeState {
 export async function fetchRecentPosts() {
   const { data, error } = await supabase
     .from('posts')
-    .select(
-      'id, user_id, content, created_at, profiles:profiles!posts_user_id_fkey(username, display_name, avatar_url)',
-    )
+    .select('id, user_id, content, created_at, image_urls, profiles:profiles!posts_user_id_fkey(username, display_name, avatar_url)')
     .order('created_at', { ascending: false })
     .limit(50)
 
@@ -53,6 +54,7 @@ export async function fetchRecentPosts() {
       user_id: row.user_id as string,
       content: row.content as string,
       created_at: row.created_at as string,
+      image_urls: (row.image_urls ?? []) as string[],
       profiles: author
         ? {
             username: author.username as string,
@@ -64,14 +66,15 @@ export async function fetchRecentPosts() {
   })
 }
 
-export async function createPost(userId: string, content: string) {
+export async function createPost(userId: string, content: string, imageUrls: string[] = []) {
   const { data, error } = await supabase
     .from('posts')
     .insert({
       user_id: userId,
       content,
+      image_urls: imageUrls,
     })
-    .select('id, user_id, content, created_at')
+    .select('id, user_id, content, created_at, image_urls')
     .single()
 
   if (error) {
@@ -92,6 +95,7 @@ export async function createPost(userId: string, content: string) {
     user_id: data.user_id as string,
     content: data.content as string,
     created_at: data.created_at as string,
+    image_urls: (data.image_urls ?? []) as string[],
     profiles: profileData
       ? {
           username: profileData.username as string,
@@ -105,7 +109,7 @@ export async function createPost(userId: string, content: string) {
 export async function fetchComments(postId: string) {
   const { data, error } = await supabase
     .from('comments')
-    .select('id, post_id, user_id, content, created_at, profiles(username, display_name, avatar_url)')
+    .select('id, post_id, user_id, content, created_at, parent_comment_id, image_urls, profiles(username, display_name, avatar_url)')
     .eq('post_id', postId)
     .order('created_at', { ascending: true })
 
@@ -126,6 +130,8 @@ export async function fetchComments(postId: string) {
       user_id: row.user_id as string,
       content: row.content as string,
       created_at: row.created_at as string,
+      parent_comment_id: (row.parent_comment_id ?? null) as string | null,
+      image_urls: (row.image_urls ?? []) as string[],
       profiles: author
         ? {
             username: author.username as string,
@@ -137,15 +143,24 @@ export async function fetchComments(postId: string) {
   })
 }
 
-export async function createComment(postId: string, userId: string, content: string) {
+export async function createComment(
+  postId: string,
+  userId: string,
+  content: string,
+  options?: { parentCommentId?: string; imageUrls?: string[] },
+) {
+  const parentCommentId = options?.parentCommentId ?? null
+  const imageUrls = options?.imageUrls ?? []
   const { data, error } = await supabase
     .from('comments')
     .insert({
       post_id: postId,
       user_id: userId,
       content,
+      parent_comment_id: parentCommentId,
+      image_urls: imageUrls,
     })
-    .select('id, post_id, user_id, content, created_at, profiles(username, display_name, avatar_url)')
+    .select('id, post_id, user_id, content, created_at, parent_comment_id, image_urls, profiles(username, display_name, avatar_url)')
     .single()
 
   if (error) {
@@ -167,6 +182,8 @@ export async function createComment(postId: string, userId: string, content: str
     user_id: data.user_id as string,
     content: data.content as string,
     created_at: data.created_at as string,
+    parent_comment_id: (data.parent_comment_id ?? null) as string | null,
+    image_urls: (data.image_urls ?? []) as string[],
     profiles: author
       ? {
           username: author.username as string,
@@ -235,5 +252,20 @@ export async function unlikePost(postId: string, userId: string) {
     throw error
   }
 }
+
+export async function deletePost(postId: string, userId: string) {
+  const { error } = await supabase
+    .from('posts')
+    .delete()
+    .eq('id', postId)
+    .eq('user_id', userId)
+
+  if (error) {
+    // eslint-disable-next-line no-console
+    console.error('[NebulaX] Failed to delete post', error)
+    throw error
+  }
+}
+
 
 
