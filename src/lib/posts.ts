@@ -71,10 +71,8 @@ export async function createPost(userId: string, content: string) {
       user_id: userId,
       content,
     })
-    .select(
-      'id, user_id, content, created_at, profiles:profiles!posts_user_id_fkey(username, display_name, avatar_url)',
-    )
-    .single<Post>()
+    .select('id, user_id, content, created_at')
+    .single()
 
   if (error) {
     // eslint-disable-next-line no-console
@@ -82,7 +80,26 @@ export async function createPost(userId: string, content: string) {
     throw error
   }
 
-  return data
+  // Fetch the author profile separately to avoid the FK join failing due to RLS
+  const { data: profileData } = await supabase
+    .from('profiles')
+    .select('username, display_name, avatar_url')
+    .eq('id', userId)
+    .single()
+
+  return {
+    id: data.id as string,
+    user_id: data.user_id as string,
+    content: data.content as string,
+    created_at: data.created_at as string,
+    profiles: profileData
+      ? {
+          username: profileData.username as string,
+          display_name: (profileData.display_name ?? null) as string | null,
+          avatar_url: (profileData.avatar_url ?? null) as string | null,
+        }
+      : undefined,
+  } satisfies Post
 }
 
 export async function fetchComments(postId: string) {
