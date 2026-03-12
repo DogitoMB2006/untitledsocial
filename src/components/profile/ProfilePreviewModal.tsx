@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { createPortal } from 'react-dom'
+import { useNavigate } from 'react-router-dom'
 import type { Profile } from '../../lib/profile'
 
 interface ProfilePreviewModalProps {
@@ -33,6 +34,8 @@ const ProfilePreviewModal = ({
   fallbackHandle,
   onClose,
 }: ProfilePreviewModalProps) => {
+  const navigate = useNavigate()
+
   useEffect(() => {
     if (!isOpen) return undefined
 
@@ -56,6 +59,13 @@ const ProfilePreviewModal = ({
       : '@nebula-user'
   const bio = profile?.bio?.trim() || 'No bio yet.'
   const initials = (displayName[0] ?? 'U').toUpperCase()
+  const publicUsername = profile?.username ?? fallbackHandle ?? null
+
+  const handleViewProfile = () => {
+    if (!publicUsername) return
+    onClose()
+    navigate(`/u/${publicUsername}`)
+  }
 
   return createPortal(
     (
@@ -129,6 +139,16 @@ const ProfilePreviewModal = ({
                   {bio}
                 </p>
               </div>
+
+              {publicUsername ? (
+                <button
+                  type="button"
+                  onClick={handleViewProfile}
+                  className="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-xs font-medium text-white shadow-md shadow-blue-900/40 transition-colors hover:from-sky-400 hover:to-blue-500"
+                >
+                  View public profile
+                </button>
+              ) : null}
             </div>
           )}
         </div>
