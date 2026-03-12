@@ -341,5 +341,19 @@ export async function deletePost(postId: string, userId: string) {
   }
 }
 
+export async function deleteComment(commentId: string, userId: string) {
+  const { error } = await supabase
+    .from('comments')
+    .delete()
+    .eq('id', commentId)
+    .eq('user_id', userId)
+
+  if (error) {
+    // eslint-disable-next-line no-console
+    console.error('[NebulaX] Failed to delete comment', error)
+    throw error
+  }
+}
+
 
 

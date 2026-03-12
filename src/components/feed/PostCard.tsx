@@ -4,6 +4,7 @@ import type { Comment, Post } from '../../lib/posts'
 import {
   createComment,
   deletePost,
+  deleteComment,
   fetchComments,
   fetchLikeState,
   likePost,
@@ -30,6 +31,8 @@ const PostCard = ({ post, onDeleted }: PostCardProps) => {
   const [showComments, setShowComments] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [commentToDelete, setCommentToDelete] = useState<string | null>(null)
+  const [isDeletingComment, setIsDeletingComment] = useState(false)
   const [comments, setComments] = useState<Comment[]>([])
   const [isLoadingComments, setIsLoadingComments] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -283,7 +286,7 @@ const PostCard = ({ post, onDeleted }: PostCardProps) => {
                           )}
                         </div>
                         <div className="flex-1 space-y-0.5">
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="font-semibold text-slate-100">
                               {commentAuthor}
                             </span>
@@ -292,9 +295,21 @@ const PostCard = ({ post, onDeleted }: PostCardProps) => {
                                 {commentHandle}
                               </span>
                             ) : null}
-                            <span className="ml-auto text-[10px] text-slate-500">
-                              {new Date(comment.created_at).toLocaleTimeString()}
-                            </span>
+                            <div className="ml-auto flex items-center gap-2">
+                              <span className="text-[10px] text-slate-500">
+                                {new Date(comment.created_at).toLocaleTimeString()}
+                              </span>
+                              {user?.id === comment.user_id ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setCommentToDelete(comment.id)}
+                                  className="h-4 w-4 rounded-full border border-slate-700 text-[10px] text-slate-400 hover:border-red-500 hover:text-red-400 flex items-center justify-center transition-colors"
+                                  aria-label="Delete comment"
+                                >
+                                  ×
+                                </button>
+                              ) : null}
+                            </div>
                           </div>
                           <p className="text-slate-100">
                             {comment.content}
@@ -349,7 +364,7 @@ const PostCard = ({ post, onDeleted }: PostCardProps) => {
                                   )}
                                 </div>
                                 <div className="flex-1 space-y-0.5">
-                                  <div className="flex items-center gap-1.5">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
                                     <span className="font-semibold text-slate-100">
                                       {replyAuthor}
                                     </span>
@@ -358,9 +373,21 @@ const PostCard = ({ post, onDeleted }: PostCardProps) => {
                                         {replyHandle}
                                       </span>
                                     ) : null}
-                                    <span className="ml-auto text-[10px] text-slate-500">
-                                      {new Date(reply.created_at).toLocaleTimeString()}
-                                    </span>
+                                    <div className="ml-auto flex items-center gap-2">
+                                      <span className="text-[10px] text-slate-500">
+                                        {new Date(reply.created_at).toLocaleTimeString()}
+                                      </span>
+                                      {user?.id === reply.user_id ? (
+                                        <button
+                                          type="button"
+                                          onClick={() => setCommentToDelete(reply.id)}
+                                          className="h-4 w-4 rounded-full border border-slate-700 text-[10px] text-slate-400 hover:border-red-500 hover:text-red-400 flex items-center justify-center transition-colors"
+                                          aria-label="Delete comment"
+                                        >
+                                          ×
+                                        </button>
+                                      ) : null}
+                                    </div>
                                   </div>
                                   <p className="text-slate-100">
                                     {reply.content}
@@ -386,12 +413,27 @@ const PostCard = ({ post, onDeleted }: PostCardProps) => {
                 })}
             </div>
           )}
-          <div className="flex gap-2 pt-1">
-            <input
-              type="text"
-              className="flex-1 rounded-full border border-slate-800 bg-slate-900/70 px-3 py-1.5 text-[11px] text-slate-50 placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sky-500 disabled:opacity-50"
-              placeholder={user ? 'Reply to this post…' : 'Sign in to comment.'}
-              value={commentInput}
+          <div className="flex flex-col gap-1.5 pt-1">
+            {replyToCommentId ? (() => {
+              const replyTarget = comments.find(c => c.id === replyToCommentId)
+              const replyTargetName = replyTarget?.profiles?.display_name || replyTarget?.profiles?.username || 'User'
+              return (
+                <div className="flex items-center justify-between text-[10px] text-sky-400/80 bg-sky-500/10 px-2.5 py-1 rounded-md mb-1 w-fit border border-sky-500/20">
+                  <span>Replying to <span className="font-semibold">@{replyTargetName}</span></span>
+                  <button 
+                    onClick={() => setReplyToCommentId(null)}
+                    className="ml-3 hover:text-red-400"
+                    title="Cancel reply"
+                  >×</button>
+                </div>
+              )
+            })() : null}
+            <div className="flex gap-2">
+              <input
+                type="text"
+                className="flex-1 rounded-full border border-slate-800 bg-slate-900/70 px-3 py-1.5 text-[11px] text-slate-50 placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sky-500 disabled:opacity-50"
+                placeholder={user ? (replyToCommentId ? 'Write a reply…' : 'Add a comment…') : 'Sign in to comment.'}
+                value={commentInput}
               onChange={(event) => setCommentInput(event.target.value)}
               onPaste={(event) => {
                 const items = event.clipboardData.items
@@ -464,8 +506,9 @@ const PostCard = ({ post, onDeleted }: PostCardProps) => {
                 }
               }}
             >
-              {isSubmitting ? 'Posting...' : 'Reply'}
+              {isSubmitting ? 'Posting...' : (replyToCommentId ? 'Reply' : 'Post')}
             </Button>
+          </div>
           </div>
           {commentFiles.length > 0 ? (
             <div className="flex gap-2 overflow-x-auto pb-1 mt-2">
@@ -586,6 +629,49 @@ const PostCard = ({ post, onDeleted }: PostCardProps) => {
                     }}
                   >
                     {isDeleting ? 'Deleting...' : 'Delete'}
+                  </Button>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
+      {commentToDelete && typeof document !== 'undefined'
+        ? createPortal(
+            <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+              <div className="w-full max-w-sm rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl animate-in zoom-in-95 duration-200">
+                <h3 className="text-lg font-semibold text-slate-50">Delete Comment?</h3>
+                <p className="mt-2 text-sm text-slate-400">
+                  Are you sure you want to delete this comment?
+                </p>
+                <div className="mt-6 flex justify-end gap-3">
+                  <Button
+                    variant="outline"
+                    onClick={() => setCommentToDelete(null)}
+                    disabled={isDeletingComment}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    className="bg-red-500 hover:bg-red-600 text-white border-red-500"
+                    disabled={isDeletingComment}
+                    onClick={async () => {
+                      if (!user) return
+                      setIsDeletingComment(true)
+                      try {
+                        await deleteComment(commentToDelete, user.id)
+                        setComments(current => current.filter(c => c.id !== commentToDelete))
+                        setCommentToDelete(null)
+                      } catch (err) {
+                        const message =
+                          err instanceof Error ? err.message : 'Failed to delete comment.'
+                        setError(message)
+                      } finally {
+                        setIsDeletingComment(false)
+                      }
+                    }}
+                  >
+                    {isDeletingComment ? 'Deleting...' : 'Delete'}
                   </Button>
                 </div>
               </div>
