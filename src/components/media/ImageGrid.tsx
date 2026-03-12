@@ -45,13 +45,13 @@ const ImageGrid = ({ urls, onImageClick, size = 'default' }: ImageGridProps) => 
       <button
         type="button"
         onClick={handleClick(0)}
-        className="mt-2 w-full overflow-hidden rounded-xl border border-slate-800/80 bg-slate-900/60 hover:border-sky-500/60 transition-colors"
+        className="mt-2 flex w-full justify-center overflow-hidden rounded-xl border border-slate-800/80 bg-black/40 hover:border-sky-500/60 transition-colors"
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={urls[0]}
           alt=""
-          className="h-56 w-full object-cover"
+          className="max-h-[500px] w-auto max-w-full object-contain"
         />
       </button>
     )
@@ -71,7 +71,7 @@ const ImageGrid = ({ urls, onImageClick, size = 'default' }: ImageGridProps) => 
             onClick={handleClick(index)}
             className={clsx(
               'relative overflow-hidden rounded-xl border border-slate-800/80 bg-slate-900/60 hover:border-sky-500/60 transition-colors',
-              'h-28',
+              'aspect-square sm:aspect-[4/3] flex items-center justify-center',
             )}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
