@@ -268,6 +268,48 @@ export async function createComment(
   } satisfies Comment
 }
 
+export async function updateComment(commentId: string, userId: string, content: string) {
+  const { data, error } = await supabase
+    .from('comments')
+    .update({
+      content,
+    })
+    .eq('id', commentId)
+    .eq('user_id', userId)
+    .select('id, post_id, user_id, content, created_at, parent_comment_id, image_urls, profiles(username, display_name, avatar_url)')
+    .single()
+
+  if (error) {
+    // eslint-disable-next-line no-console
+    console.error('[NebulaX] Failed to update comment', error)
+    throw error
+  }
+
+  const authors = Array.isArray((data as any).profiles)
+    ? (data as any).profiles
+    : (data as any).profiles
+      ? [(data as any).profiles]
+      : []
+  const author = authors[0]
+
+  return {
+    id: data.id as string,
+    post_id: data.post_id as string,
+    user_id: data.user_id as string,
+    content: data.content as string,
+    created_at: data.created_at as string,
+    parent_comment_id: (data.parent_comment_id ?? null) as string | null,
+    image_urls: (data.image_urls ?? []) as string[],
+    profiles: author
+      ? {
+          username: author.username as string,
+          display_name: (author.display_name ?? null) as string | null,
+          avatar_url: (author.avatar_url ?? null) as string | null,
+        }
+      : undefined,
+  } satisfies Comment
+}
+
 export async function fetchLikeState(postId: string, userId: string | null): Promise<LikeState> {
   const { count } = await supabase
     .from('post_likes')
