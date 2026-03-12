@@ -1,15 +1,22 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
-import type { Profile } from '../../lib/profile'
+import { useAuth } from '../../context/AuthContext'
+import {
+  followUser,
+  type ProfileWithStats,
+  unfollowUser,
+} from '../../lib/profile'
+import Button from '../ui/Button'
 
 interface ProfilePreviewModalProps {
   isOpen: boolean
   isLoading: boolean
-  profile: Profile | null
+  profile: ProfileWithStats | null
   fallbackName: string
   fallbackHandle?: string
   onClose: () => void
+  onProfileUpdated?: (profile: ProfileWithStats) => void
 }
 
 const formatJoinDate = (value?: string) => {
@@ -33,8 +40,13 @@ const ProfilePreviewModal = ({
   fallbackName,
   fallbackHandle,
   onClose,
+  onProfileUpdated,
 }: ProfilePreviewModalProps) => {
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const [localProfile, setLocalProfile] = useState<ProfileWithStats | null>(profile)
+  const [isUpdatingFollowState, setIsUpdatingFollowState] = useState(false)
+  const [followError, setFollowError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!isOpen) return undefined
@@ -49,17 +61,62 @@ const ProfilePreviewModal = ({
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [isOpen, onClose])
 
+  useEffect(() => {
+    setLocalProfile(profile)
+    setFollowError(null)
+  }, [profile, isOpen])
+
   if (!isOpen) return null
 
-  const displayName = profile?.display_name ?? fallbackName
-  const username = profile?.username
-    ? `@${profile.username}`
+  const activeProfile = localProfile ?? profile
+  const displayName = activeProfile?.display_name ?? fallbackName
+  const username = activeProfile?.username
+    ? `@${activeProfile.username}`
     : fallbackHandle
       ? `@${fallbackHandle}`
       : '@nebula-user'
-  const bio = profile?.bio?.trim() || 'No bio yet.'
+  const bio = activeProfile?.bio?.trim() || 'No bio yet.'
   const initials = (displayName[0] ?? 'U').toUpperCase()
-  const publicUsername = profile?.username ?? fallbackHandle ?? null
+  const publicUsername = activeProfile?.username ?? fallbackHandle ?? null
+  const isOwner = Boolean(user && activeProfile && user.id === activeProfile.id)
+  const canToggleFollow = Boolean(user && activeProfile && !isOwner)
+  const followerCount = activeProfile?.follower_count ?? 0
+  const followingCount = activeProfile?.following_count ?? 0
+
+  const handleToggleFollow = async () => {
+    if (!user || !activeProfile || isOwner || isUpdatingFollowState) return
+
+    const nextFollowState = !activeProfile.is_followed_by_viewer
+    const nextProfile = {
+      ...activeProfile,
+      is_followed_by_viewer: nextFollowState,
+      follower_count: Math.max(
+        0,
+        activeProfile.follower_count + (nextFollowState ? 1 : -1),
+      ),
+    } satisfies ProfileWithStats
+
+    setIsUpdatingFollowState(true)
+    setFollowError(null)
+    setLocalProfile(nextProfile)
+    onProfileUpdated?.(nextProfile)
+
+    try {
+      if (nextFollowState) {
+        await followUser(user.id, activeProfile.id)
+      } else {
+        await unfollowUser(user.id, activeProfile.id)
+      }
+    } catch (error) {
+      setLocalProfile(activeProfile)
+      onProfileUpdated?.(activeProfile)
+      setFollowError(
+        error instanceof Error ? error.message : 'Failed to update follow state.',
+      )
+    } finally {
+      setIsUpdatingFollowState(false)
+    }
+  }
 
   const handleViewProfile = () => {
     if (!publicUsername) return
@@ -78,10 +135,10 @@ const ProfilePreviewModal = ({
         onClick={(event) => event.stopPropagation()}
       >
         <div className="relative h-28 sm:h-32 bg-gradient-to-br from-sky-500/35 via-blue-600/30 to-slate-950">
-          {profile?.banner_url ? (
+          {activeProfile?.banner_url ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={profile.banner_url}
+              src={activeProfile.banner_url}
               alt={`${displayName} banner`}
               className="h-full w-full object-cover"
             />
@@ -98,10 +155,10 @@ const ProfilePreviewModal = ({
 
         <div className="relative px-4 sm:px-5 pb-4 sm:pb-5">
           <div className="-mt-9 mb-3 h-18 w-18 sm:h-20 sm:w-20 overflow-hidden rounded-full border-4 border-slate-950 bg-slate-900 shadow-lg shadow-black/40">
-            {profile?.avatar_url ? (
+            {activeProfile?.avatar_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={profile.avatar_url}
+                src={activeProfile.avatar_url}
                 alt={displayName}
                 className="h-full w-full object-cover"
               />
@@ -130,8 +187,18 @@ const ProfilePreviewModal = ({
                 </p>
               </div>
 
-              <div className="inline-flex items-center rounded-full border border-slate-800/80 bg-slate-900/70 px-3 py-1 text-[11px] text-slate-400">
-                {formatJoinDate(profile?.created_at)}
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="inline-flex items-center rounded-full border border-slate-800/80 bg-slate-900/70 px-3 py-1 text-[11px] text-slate-400">
+                  {formatJoinDate(activeProfile?.created_at)}
+                </div>
+                <div className="inline-flex items-center rounded-full border border-slate-800/80 bg-slate-900/70 px-3 py-1 text-[11px] text-slate-300">
+                  <span className="font-semibold text-slate-100">{followerCount}</span>
+                  <span className="ml-1">followers</span>
+                </div>
+                <div className="inline-flex items-center rounded-full border border-slate-800/80 bg-slate-900/70 px-3 py-1 text-[11px] text-slate-300">
+                  <span className="font-semibold text-slate-100">{followingCount}</span>
+                  <span className="ml-1">following</span>
+                </div>
               </div>
 
               <div className="rounded-2xl border border-slate-800/80 bg-slate-900/60 px-3.5 py-3">
@@ -140,15 +207,36 @@ const ProfilePreviewModal = ({
                 </p>
               </div>
 
-              {publicUsername ? (
-                <button
-                  type="button"
-                  onClick={handleViewProfile}
-                  className="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-xs font-medium text-white shadow-md shadow-blue-900/40 transition-colors hover:from-sky-400 hover:to-blue-500"
-                >
-                  View public profile
-                </button>
+              {followError ? (
+                <p className="text-xs text-red-300">{followError}</p>
               ) : null}
+
+              <div className="flex flex-wrap items-center gap-2">
+                {canToggleFollow ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={activeProfile?.is_followed_by_viewer ? 'outline' : 'primary'}
+                    onClick={() => void handleToggleFollow()}
+                    disabled={isUpdatingFollowState}
+                  >
+                    {isUpdatingFollowState
+                      ? 'Updating...'
+                      : activeProfile?.is_followed_by_viewer
+                        ? 'Unfollow'
+                        : 'Follow'}
+                  </Button>
+                ) : null}
+                {publicUsername ? (
+                  <button
+                    type="button"
+                    onClick={handleViewProfile}
+                    className="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-xs font-medium text-white shadow-md shadow-blue-900/40 transition-colors hover:from-sky-400 hover:to-blue-500"
+                  >
+                    View public profile
+                  </button>
+                ) : null}
+              </div>
             </div>
           )}
         </div>
