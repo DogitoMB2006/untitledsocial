@@ -1,8 +1,19 @@
 import { Outlet } from 'react-router-dom'
 import Navbar from './Navbar'
 import Footer from './Footer'
+import InAppNotificationStack from '../notifications/InAppNotificationStack'
+import NotificationPermissionModal from '../notifications/NotificationPermissionModal'
+import { useNotifications } from '../../context/NotificationsContext'
 
 const AppLayout = () => {
+  const {
+    browserPermission,
+    dismissPermissionPrompt,
+    isPermissionPromptOpen,
+    isRequestingPermission,
+    requestBrowserPermission,
+  } = useNotifications()
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 flex">
       {/* Side Navbar */}
@@ -15,6 +26,14 @@ const AppLayout = () => {
         </div>
         <Footer />
       </main>
+      <NotificationPermissionModal
+        isOpen={isPermissionPromptOpen}
+        browserPermission={browserPermission}
+        isRequesting={isRequestingPermission}
+        onEnable={() => void requestBrowserPermission()}
+        onClose={dismissPermissionPrompt}
+      />
+      <InAppNotificationStack />
     </div>
   )
 }

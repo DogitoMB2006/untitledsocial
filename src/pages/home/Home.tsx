@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import Button from '../../components/ui/Button'
 import Card from '../../components/ui/Card'
 import SectionTitle from '../../components/ui/SectionTitle'
@@ -102,6 +102,7 @@ const marketingHome = () => (
 
 const Home = () => {
   const { user } = useAuth()
+  const [searchParams] = useSearchParams()
 
   const [posts, setPosts] = useState<Post[]>([])
   const [isLoadingPosts, setIsLoadingPosts] = useState(false)
@@ -138,6 +139,23 @@ const Home = () => {
     return () => window.removeEventListener('post-created', handlePostCreated)
   }, [])
 
+  useEffect(() => {
+    const postId = searchParams.get('post')
+    if (!postId || posts.length === 0) return
+
+    const frame = window.requestAnimationFrame(() => {
+      const target = document.getElementById(`post-${postId}`)
+      if (target) {
+        target.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center',
+        })
+      }
+    })
+
+    return () => window.cancelAnimationFrame(frame)
+  }, [posts, searchParams])
+
   if (!user) {
     return marketingHome()
   }
@@ -166,13 +184,22 @@ const Home = () => {
       ) : (
         <div className="space-y-3">
           {posts.map((post) => (
-            <PostCard
+            <div
               key={post.id}
-              post={post}
-              onDeleted={(id) =>
-                setPosts((current) => current.filter((p) => p.id !== id))
+              id={`post-${post.id}`}
+              className={
+                searchParams.get('post') === post.id
+                  ? 'rounded-[1.4rem] ring-2 ring-sky-500/40 ring-offset-2 ring-offset-slate-950 transition-all'
+                  : undefined
               }
-            />
+            >
+              <PostCard
+                post={post}
+                onDeleted={(id) =>
+                  setPosts((current) => current.filter((p) => p.id !== id))
+                }
+              />
+            </div>
           ))}
         </div>
       )}

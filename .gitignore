@@ -24,3 +24,5 @@ dist-ssr
 *.sw?
 .cursor/plans/add_followers_93462a3e.plan.md
 supabase-follows.sql
+.cursor/plans/add_live_notifications_and_inbox_0b3643cb.plan.md
+supabase-notifications.sql

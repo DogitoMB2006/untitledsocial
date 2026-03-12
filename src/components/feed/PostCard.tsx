@@ -106,7 +106,7 @@ const PostCard = ({ post, onDeleted }: PostCardProps) => {
   }, [post.id, user?.id])
 
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
+    const handleClickOutside = (_event: MouseEvent) => {
       if (openDropdownId) {
         setOpenDropdownId(null)
       }

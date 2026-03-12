@@ -31,3 +31,17 @@
     transform: scale(1); 
   }
 }
+
+@keyframes toastShrink {
+  from { transform: translateX(0); }
+  to { transform: translateX(-100%); }
+}
+
+.Toastify__toast-container {
+  z-index: 20000;
+}
+
+.Toastify__toast-body {
+  margin: 0;
+  padding: 0;
+}

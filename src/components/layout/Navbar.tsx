@@ -1,15 +1,28 @@
 import { useEffect, useState } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
-import { Home, MessageSquare, Settings, PlusSquare, LogOut } from 'lucide-react'
+import { Home, MessageSquare, Settings, PlusSquare, LogOut, Bell } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { getProfileByUserId, type Profile } from '../../lib/profile'
+import { useNotifications } from '../../context/NotificationsContext'
+import { getNotificationHref, type AppNotification } from '../../lib/notifications'
 import Button from '../ui/Button'
 import CreatePostModal from '../post/CreatePostModal'
+import NotificationsInboxModal from '../notifications/NotificationsInboxModal'
 
 const Navbar = () => {
   const { user, signOut } = useAuth()
+  const {
+    browserPermission,
+    isLoading: isLoadingNotifications,
+    markAllAsRead,
+    markAsRead,
+    notifications,
+    openPermissionPrompt,
+    unreadCount,
+  } = useNotifications()
   const [profile, setProfile] = useState<Profile | null>(null)
   const [isPostModalOpen, setIsPostModalOpen] = useState(false)
+  const [isInboxOpen, setIsInboxOpen] = useState(false)
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -48,6 +61,15 @@ const Navbar = () => {
   const handleSignOut = async () => {
     await signOut()
     navigate('/', { replace: true })
+  }
+
+  const handleNotificationClick = async (notification: AppNotification) => {
+    if (user) {
+      await markAsRead(notification.id)
+    }
+
+    setIsInboxOpen(false)
+    await navigate(getNotificationHref(notification))
   }
 
   const NavItem = ({ to, icon: Icon, label, onClick, isActive }: { to?: string; icon: any; label: string; onClick?: () => void; isActive?: boolean }) => {
@@ -151,6 +173,25 @@ const Navbar = () => {
           ) : (
             <>
               <NavItem to="/" icon={Home} label="Home" />
+              <button
+                type="button"
+                onClick={() => setIsInboxOpen(true)}
+                className="relative w-full text-left outline-none"
+              >
+                <div className="flex items-center gap-4 rounded-xl p-3 transition-all duration-300 w-full text-slate-300 hover:bg-slate-800/60 hover:text-slate-50">
+                  <div className="relative shrink-0">
+                    <Bell className="h-6 w-6 transition-transform group-hover:scale-105" />
+                    {unreadCount > 0 ? (
+                      <span className="absolute -right-1.5 -top-1.5 inline-flex min-w-5 items-center justify-center rounded-full bg-sky-500 px-1.5 text-[10px] font-semibold text-white shadow-lg shadow-sky-500/30">
+                        {unreadCount > 9 ? '9+' : unreadCount}
+                      </span>
+                    ) : null}
+                  </div>
+                  <span className="hidden group-hover:inline-block opacity-0 group-hover:opacity-100 whitespace-nowrap transition-opacity duration-300 delay-75">
+                    Inbox
+                  </span>
+                </div>
+              </button>
               <NavItem to="/messages" icon={MessageSquare} label="Direct Messages" />
               <NavItem to="/settings/profile" icon={Settings} label="Settings" />
 
@@ -182,6 +223,17 @@ const Navbar = () => {
       </aside>
 
       <CreatePostModal isOpen={isPostModalOpen} onClose={() => setIsPostModalOpen(false)} />
+      <NotificationsInboxModal
+        isOpen={isInboxOpen}
+        notifications={notifications}
+        unreadCount={unreadCount}
+        isLoading={isLoadingNotifications}
+        browserPermission={browserPermission}
+        onEnableDesktop={openPermissionPrompt}
+        onMarkAllRead={() => void markAllAsRead()}
+        onNotificationClick={(notification) => void handleNotificationClick(notification)}
+        onClose={() => setIsInboxOpen(false)}
+      />
     </>
   )
 }
