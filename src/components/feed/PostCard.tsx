@@ -40,6 +40,7 @@ const PostCard = ({ post, onDeleted }: PostCardProps) => {
   const [comments, setComments] = useState<Comment[]>([])
   const [isLoadingComments, setIsLoadingComments] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null)
   const [commentInput, setCommentInput] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [commentFiles, setCommentFiles] = useState<File[]>([])
@@ -96,6 +97,20 @@ const PostCard = ({ post, onDeleted }: PostCardProps) => {
       isMounted = false
     }
   }, [post.id, user?.id])
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (openDropdownId) {
+        setOpenDropdownId(null)
+      }
+    }
+    if (openDropdownId) {
+      document.addEventListener('click', handleClickOutside)
+    }
+    return () => {
+      document.removeEventListener('click', handleClickOutside)
+    }
+  }, [openDropdownId])
 
   const handleToggleComments = () => {
     const next = !showComments
@@ -375,22 +390,48 @@ const PostCard = ({ post, onDeleted }: PostCardProps) => {
                     Reply
                   </button>
                   {user?.id === comment.user_id ? (
-                    <>
+                    <div className="relative">
                       <button
                         type="button"
-                        className="inline-flex items-center rounded-full border border-slate-700 bg-slate-900/70 px-2.5 py-1 text-[10px] font-medium text-slate-300 transition-colors hover:border-sky-500/50 hover:text-sky-300"
-                        onClick={() => beginCommentEdit(comment)}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setOpenDropdownId(openDropdownId === comment.id ? null : comment.id)
+                        }}
+                        className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-700 bg-slate-900/70 text-slate-300 transition-colors hover:border-sky-500/50 hover:text-sky-300"
+                        aria-label="Comment options"
                       >
-                        Edit
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                        </svg>
                       </button>
-                      <button
-                        type="button"
-                        className="inline-flex items-center rounded-full border border-red-500/30 bg-red-500/10 px-2.5 py-1 text-[10px] font-medium text-red-300 transition-colors hover:border-red-400/60 hover:bg-red-500/15"
-                        onClick={() => setCommentToDelete(comment)}
-                      >
-                        Delete
-                      </button>
-                    </>
+                      
+                      {openDropdownId === comment.id && (
+                        <div className="absolute left-0 top-full mt-1.5 w-28 rounded-xl border border-slate-700 bg-slate-800 shadow-xl z-20 overflow-hidden py-1 animate-in zoom-in-95 duration-100">
+                          <button
+                            type="button"
+                            className="w-full px-3 py-1.5 text-left text-[11px] font-medium text-slate-200 hover:bg-slate-700/80 transition-colors"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setOpenDropdownId(null)
+                              beginCommentEdit(comment)
+                            }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            className="w-full px-3 py-1.5 text-left text-[11px] font-medium text-red-400 hover:bg-slate-700/80 transition-colors"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setOpenDropdownId(null)
+                              setCommentToDelete(comment)
+                            }}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   ) : null}
                 </div>
               </>
