@@ -106,6 +106,7 @@ const Home = () => {
 
   const [content, setContent] = useState('')
   const [files, setFiles] = useState<File[]>([])
+  const [spoileredIndices, setSpoileredIndices] = useState<Set<number>>(new Set())
   const [posts, setPosts] = useState<Post[]>([])
   const [isLoadingPosts, setIsLoadingPosts] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -140,13 +141,17 @@ const Home = () => {
     try {
       let imageUrls: string[] = []
       if (files.length > 0) {
-        imageUrls = await uploadImages(files, 'posts')
+        const uploadedUrls = await uploadImages(files, 'posts')
+        imageUrls = uploadedUrls.map((url, index) => 
+          spoileredIndices.has(index) ? `${url}?spoiler=true` : url
+        )
       }
 
       const newPost = await createPost(user.id, trimmed, imageUrls)
       setPosts((current) => [newPost, ...current])
       setContent('')
       setFiles([])
+      setSpoileredIndices(new Set())
     } catch (err) {
       const message =
         err instanceof Error ? err.message : 'Failed to create post.'
@@ -206,20 +211,53 @@ const Home = () => {
             <span>{content.length}/280</span>
           </div>
           {files.length > 0 ? (
-            <div className="flex gap-2 overflow-x-auto">
+            <div className="flex gap-2 overflow-x-auto pb-1 mt-2">
               {files.map((file, index) => {
                 const url = URL.createObjectURL(file)
+                const isSpoiler = spoileredIndices.has(index)
                 return (
                   <div
                     key={`${file.name}-${index}`}
-                    className="h-16 w-16 rounded-xl overflow-hidden border border-slate-700/80 bg-slate-900/70"
+                    className="group relative h-20 w-20 shrink-0 rounded-xl overflow-hidden border border-slate-700/80 bg-slate-900/70"
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={url}
                       alt={file.name}
-                      className="h-full w-full object-cover"
+                      className={`h-full w-full object-cover transition-all ${isSpoiler ? 'blur-md brightness-50' : ''}`}
                     />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSpoileredIndices(prev => {
+                          const next = new Set(prev)
+                          if (next.has(index)) next.delete(index)
+                          else next.add(index)
+                          return next
+                        })
+                      }}
+                      className={`absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-semibold ${isSpoiler ? 'text-red-400 opacity-100 bg-black/60' : 'text-slate-200'}`}
+                    >
+                      {isSpoiler ? 'Spoiler On' : '+ Spoiler'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFiles(prev => prev.filter((_, i) => i !== index))
+                        setSpoileredIndices(prev => {
+                          const next = new Set<number>()
+                          // Re-map indices since we removed one
+                          Array.from(prev).forEach(idx => {
+                            if (idx < index) next.add(idx)
+                            if (idx > index) next.add(idx - 1)
+                          })
+                          return next
+                        })
+                      }}
+                      className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/60 text-slate-200 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500 hover:text-white"
+                    >
+                      ×
+                    </button>
                   </div>
                 )
               })}

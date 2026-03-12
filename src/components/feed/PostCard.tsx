@@ -32,6 +32,7 @@ const PostCard = ({ post, onDeleted }: PostCardProps) => {
   const [commentInput, setCommentInput] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [commentFiles, setCommentFiles] = useState<File[]>([])
+  const [spoileredIndices, setSpoileredIndices] = useState<Set<number>>(new Set())
   const commentFileInputRef = useRef<HTMLInputElement | null>(null)
   const [replyToCommentId, setReplyToCommentId] = useState<string | null>(null)
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null)
@@ -430,7 +431,10 @@ const PostCard = ({ post, onDeleted }: PostCardProps) => {
                 try {
                   let imageUrls: string[] = []
                   if (commentFiles.length > 0) {
-                    imageUrls = await uploadImages(commentFiles, 'comments')
+                    const uploadedUrls = await uploadImages(commentFiles, 'comments')
+                    imageUrls = uploadedUrls.map((url, index) => 
+                      spoileredIndices.has(index) ? `${url}?spoiler=true` : url
+                    )
                   }
                   const newComment = await createComment(post.id, user.id, trimmed, {
                     parentCommentId: replyToCommentId ?? undefined,
@@ -439,6 +443,7 @@ const PostCard = ({ post, onDeleted }: PostCardProps) => {
                   setComments((current) => [...current, newComment])
                   setCommentInput('')
                   setCommentFiles([])
+                  setSpoileredIndices(new Set())
                   setReplyToCommentId(null)
                 } catch (err) {
                   const message =
@@ -451,15 +456,55 @@ const PostCard = ({ post, onDeleted }: PostCardProps) => {
             </Button>
           </div>
           {commentFiles.length > 0 ? (
-            <div className="flex gap-2 text-[10px] text-slate-400">
-              {commentFiles.map((file, index) => (
-                <div
-                  key={`${file.name}-${index}`}
-                  className="h-8 rounded-full border border-slate-700/80 bg-slate-900/70 px-2 flex items-center"
-                >
-                  {file.name}
-                </div>
-              ))}
+            <div className="flex gap-2 overflow-x-auto pb-1 mt-2">
+              {commentFiles.map((file, index) => {
+                const url = URL.createObjectURL(file)
+                const isSpoiler = spoileredIndices.has(index)
+                return (
+                  <div
+                    key={`${file.name}-${index}`}
+                    className="group relative h-14 w-14 shrink-0 rounded-xl overflow-hidden border border-slate-700/80 bg-slate-900/70"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={url}
+                      alt={file.name}
+                      className={`h-full w-full object-cover transition-all ${isSpoiler ? 'blur-md brightness-50' : ''}`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSpoileredIndices(prev => {
+                          const next = new Set(prev)
+                          if (next.has(index)) next.delete(index)
+                          else next.add(index)
+                          return next
+                        })
+                      }}
+                      className={`absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity text-[9px] font-semibold text-center leading-tight ${isSpoiler ? 'text-red-400 opacity-100 bg-black/60' : 'text-slate-200'}`}
+                    >
+                      {isSpoiler ? 'Spoiler' : '+ Spoiler'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCommentFiles(prev => prev.filter((_, i) => i !== index))
+                        setSpoileredIndices(prev => {
+                          const next = new Set<number>()
+                          Array.from(prev).forEach(idx => {
+                            if (idx < index) next.add(idx)
+                            if (idx > index) next.add(idx - 1)
+                          })
+                          return next
+                        })
+                      }}
+                      className="absolute top-1 right-1 h-4 w-4 rounded-full bg-black/60 text-slate-200 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500 hover:text-white text-xs"
+                    >
+                      ×
+                    </button>
+                  </div>
+                )
+              })}
             </div>
           ) : null}
         </div>
