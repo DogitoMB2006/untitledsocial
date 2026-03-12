@@ -109,6 +109,7 @@ const Home = () => {
   const [spoileredIndices, setSpoileredIndices] = useState<Set<number>>(new Set())
   const [posts, setPosts] = useState<Post[]>([])
   const [isLoadingPosts, setIsLoadingPosts] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const maxPostImages = 4
@@ -133,11 +134,12 @@ const Home = () => {
   }, [user])
 
   const handlePost = async () => {
-    if (!user) return
+    if (!user || isSubmitting) return
     const trimmed = content.trim()
     if (!trimmed) return
     if (trimmed.length > 280) return
 
+    setIsSubmitting(true)
     try {
       let imageUrls: string[] = []
       if (files.length > 0) {
@@ -156,6 +158,22 @@ const Home = () => {
       const message =
         err instanceof Error ? err.message : 'Failed to create post.'
       setError(message)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handlePaste = (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = event.clipboardData.items
+    const newFiles: File[] = []
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith('image/')) {
+        const file = items[i].getAsFile()
+        if (file) newFiles.push(file)
+      }
+    }
+    if (newFiles.length > 0) {
+      setFiles((prev) => [...prev, ...newFiles].slice(0, maxPostImages))
     }
   }
 
@@ -177,6 +195,7 @@ const Home = () => {
         <textarea
           value={content}
           onChange={(event) => setContent(event.target.value)}
+          onPaste={handlePaste}
           placeholder="What&apos;s on your mind?"
           className="w-full resize-none rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2 text-sm text-slate-50 placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
           rows={3}
@@ -273,10 +292,11 @@ const Home = () => {
               disabled={
                 !content.trim() ||
                 content.length > 280 ||
-                files.length > maxPostImages
+                files.length > maxPostImages ||
+                isSubmitting
               }
             >
-              Post
+              {isSubmitting ? 'Posting...' : 'Post'}
             </Button>
           </div>
         </div>

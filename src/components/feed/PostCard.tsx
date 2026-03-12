@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { Comment, Post } from '../../lib/posts'
 import {
   createComment,
@@ -27,8 +28,11 @@ const PostCard = ({ post, onDeleted }: PostCardProps) => {
   const [liked, setLiked] = useState(false)
   const [likes, setLikes] = useState(0)
   const [showComments, setShowComments] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
   const [comments, setComments] = useState<Comment[]>([])
   const [isLoadingComments, setIsLoadingComments] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [commentInput, setCommentInput] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [commentFiles, setCommentFiles] = useState<File[]>([])
@@ -185,16 +189,7 @@ const PostCard = ({ post, onDeleted }: PostCardProps) => {
         {user?.id === post.user_id ? (
           <button
             type="button"
-            onClick={async () => {
-              try {
-                await deletePost(post.id, user.id)
-                onDeleted?.(post.id)
-              } catch (err) {
-                const message =
-                  err instanceof Error ? err.message : 'Failed to delete post.'
-                setError(message)
-              }
-            }}
+            onClick={() => setShowDeleteConfirm(true)}
             className="mt-1 h-5 w-5 rounded-full border border-slate-700 text-[10px] text-slate-400 hover:border-red-500 hover:text-red-400 flex items-center justify-center transition-colors shrink-0"
             aria-label="Delete post"
           >
@@ -398,6 +393,19 @@ const PostCard = ({ post, onDeleted }: PostCardProps) => {
               placeholder={user ? 'Reply to this post…' : 'Sign in to comment.'}
               value={commentInput}
               onChange={(event) => setCommentInput(event.target.value)}
+              onPaste={(event) => {
+                const items = event.clipboardData.items
+                const newFiles: File[] = []
+                for (let i = 0; i < items.length; i++) {
+                  if (items[i].type.startsWith('image/')) {
+                    const file = items[i].getAsFile()
+                    if (file) newFiles.push(file)
+                  }
+                }
+                if (newFiles.length > 0) {
+                  setCommentFiles((prev) => [...prev, ...newFiles].slice(0, maxCommentImages))
+                }
+              }}
               disabled={!user}
             />
             <button
@@ -421,13 +429,15 @@ const PostCard = ({ post, onDeleted }: PostCardProps) => {
             />
             <Button
               size="sm"
-              className="text-[11px] px-3"
-              disabled={!user || !commentInput.trim()}
+              className="text-[11px] px-3 transition-colors"
+              disabled={!user || !commentInput.trim() || isSubmitting || commentFiles.length > maxCommentImages}
               onClick={async () => {
-                if (!user) return
+                if (!user || isSubmitting) return
                 const trimmed = commentInput.trim()
                 if (!trimmed) return
                 if (trimmed.length > 280) return
+                
+                setIsSubmitting(true)
                 try {
                   let imageUrls: string[] = []
                   if (commentFiles.length > 0) {
@@ -449,10 +459,12 @@ const PostCard = ({ post, onDeleted }: PostCardProps) => {
                   const message =
                     err instanceof Error ? err.message : 'Failed to add comment.'
                   setError(message)
+                } finally {
+                  setIsSubmitting(false)
                 }
               }}
             >
-              Reply
+              {isSubmitting ? 'Posting...' : 'Reply'}
             </Button>
           </div>
           {commentFiles.length > 0 ? (
@@ -537,7 +549,51 @@ const PostCard = ({ post, onDeleted }: PostCardProps) => {
           }
         />
       ) : null}
-      <ProfilePreviewModal
+      
+      {showDeleteConfirm && typeof document !== 'undefined'
+        ? createPortal(
+            <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+              <div className="w-full max-w-sm rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl animate-in zoom-in-95 duration-200">
+                <h3 className="text-lg font-semibold text-slate-50">Delete Post?</h3>
+                <p className="mt-2 text-sm text-slate-400">
+                  This action cannot be undone. This post will be permanently removed.
+                </p>
+                <div className="mt-6 flex justify-end gap-3">
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowDeleteConfirm(false)}
+                    disabled={isDeleting}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    className="bg-red-500 hover:bg-red-600 text-white border-red-500"
+                    disabled={isDeleting}
+                    onClick={async () => {
+                      if (!user) return
+                      setIsDeleting(true)
+                      try {
+                        await deletePost(post.id, user.id)
+                        onDeleted?.(post.id)
+                        setShowDeleteConfirm(false)
+                      } catch (err) {
+                        const message =
+                          err instanceof Error ? err.message : 'Failed to delete post.'
+                        setError(message)
+                      } finally {
+                        setIsDeleting(false)
+                      }
+                    }}
+                  >
+                    {isDeleting ? 'Deleting...' : 'Delete'}
+                  </Button>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
+    <ProfilePreviewModal
         isOpen={showProfilePreview}
         isLoading={isLoadingProfilePreview}
         profile={authorProfile}
