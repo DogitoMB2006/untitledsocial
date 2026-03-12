@@ -5,10 +5,16 @@ import Button from '../../components/ui/Button'
 import PostCard from '../../components/feed/PostCard'
 import ImageGrid from '../../components/media/ImageGrid'
 import ImageModal from '../../components/media/ImageModal'
+import ProfileConnectionsModal from '../../components/profile/ProfileConnectionsModal'
 import { useAuth } from '../../context/AuthContext'
 import {
+  fetchFollowers,
+  fetchFollowing,
+  followUser,
+  type ProfileListItem,
   getProfileWithStatsByUsername,
   type ProfileWithStats,
+  unfollowUser,
 } from '../../lib/profile'
 import {
   fetchCommentsByUserId,
@@ -26,6 +32,12 @@ const ProfilePage = () => {
   const [comments, setComments] = useState<Comment[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [followError, setFollowError] = useState<string | null>(null)
+  const [isUpdatingFollowState, setIsUpdatingFollowState] = useState(false)
+  const [activeConnectionsType, setActiveConnectionsType] = useState<'followers' | 'following' | null>(null)
+  const [connectionItems, setConnectionItems] = useState<ProfileListItem[]>([])
+  const [isLoadingConnections, setIsLoadingConnections] = useState(false)
+  const [connectionsError, setConnectionsError] = useState<string | null>(null)
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null)
   const [modalUrls, setModalUrls] = useState<string[] | null>(null)
 
@@ -38,11 +50,18 @@ const ProfilePage = () => {
 
     setIsLoading(true)
     setError(null)
+    setFollowError(null)
+    setActiveConnectionsType(null)
+    setConnectionItems([])
+    setConnectionsError(null)
 
     void (async () => {
       try {
-        const found = await getProfileWithStatsByUsername(username)
-        if (!found) {
+        const viewerAwareProfile = await getProfileWithStatsByUsername(
+          username,
+          user?.id ?? null,
+        )
+        if (!viewerAwareProfile) {
           setError('Profile not found.')
           setProfile(null)
           setPosts([])
@@ -50,10 +69,10 @@ const ProfilePage = () => {
           return
         }
 
-        setProfile(found)
+        setProfile(viewerAwareProfile)
         const [profilePosts, profileComments] = await Promise.all([
-          fetchPostsByUserId(found.id),
-          fetchCommentsByUserId(found.id),
+          fetchPostsByUserId(viewerAwareProfile.id),
+          fetchCommentsByUserId(viewerAwareProfile.id),
         ])
         setPosts(profilePosts)
         setComments(profileComments)
@@ -65,7 +84,7 @@ const ProfilePage = () => {
         setIsLoading(false)
       }
     })()
-  }, [username])
+  }, [username, user?.id])
 
   if (isLoading) {
     return (
@@ -95,6 +114,58 @@ const ProfilePage = () => {
     month: 'long',
     year: 'numeric',
   })
+
+  const handleToggleFollow = async () => {
+    if (!user || isOwner || isUpdatingFollowState) return
+
+    const nextFollowState = !profile.is_followed_by_viewer
+    const previousProfile = profile
+    const nextProfile = {
+      ...profile,
+      is_followed_by_viewer: nextFollowState,
+      follower_count: Math.max(0, profile.follower_count + (nextFollowState ? 1 : -1)),
+    } satisfies ProfileWithStats
+
+    setFollowError(null)
+    setIsUpdatingFollowState(true)
+    setProfile(nextProfile)
+
+    try {
+      if (nextFollowState) {
+        await followUser(user.id, profile.id)
+      } else {
+        await unfollowUser(user.id, profile.id)
+      }
+    } catch (err) {
+      setProfile(previousProfile)
+      setFollowError(
+        err instanceof Error ? err.message : 'Failed to update follow state.',
+      )
+    } finally {
+      setIsUpdatingFollowState(false)
+    }
+  }
+
+  const handleOpenConnections = async (type: 'followers' | 'following') => {
+    setActiveConnectionsType(type)
+    setConnectionItems([])
+    setConnectionsError(null)
+    setIsLoadingConnections(true)
+
+    try {
+      const items =
+        type === 'followers'
+          ? await fetchFollowers(profile.id)
+          : await fetchFollowing(profile.id)
+      setConnectionItems(items)
+    } catch (err) {
+      setConnectionsError(
+        err instanceof Error ? err.message : `Failed to load ${type}.`,
+      )
+    } finally {
+      setIsLoadingConnections(false)
+    }
+  }
 
   return (
     <div className="space-y-5">
@@ -138,6 +209,19 @@ const ProfilePage = () => {
               <Link to="/settings/profile">
                 <Button size="sm">Edit profile</Button>
               </Link>
+            ) : user ? (
+              <Button
+                size="sm"
+                variant={profile.is_followed_by_viewer ? 'outline' : 'primary'}
+                onClick={() => void handleToggleFollow()}
+                disabled={isUpdatingFollowState}
+              >
+                {isUpdatingFollowState
+                  ? 'Updating...'
+                  : profile.is_followed_by_viewer
+                    ? 'Unfollow'
+                    : 'Follow'}
+              </Button>
             ) : null}
           </div>
 
@@ -145,13 +229,31 @@ const ProfilePage = () => {
             {profile.bio?.trim() || 'No bio yet.'}
           </p>
 
-          <div className="mt-4 flex items-center gap-2 text-xs text-slate-300">
+          {followError ? (
+            <p className="mt-3 text-xs text-red-300">{followError}</p>
+          ) : null}
+
+          <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-slate-300">
             <span className="rounded-full border border-slate-700/80 bg-slate-900/70 px-3 py-1">
               {profile.post_count} posts
             </span>
             <span className="rounded-full border border-slate-700/80 bg-slate-900/70 px-3 py-1">
               {profile.comment_count} comments
             </span>
+            <button
+              type="button"
+              onClick={() => void handleOpenConnections('followers')}
+              className="rounded-full border border-slate-700/80 bg-slate-900/70 px-3 py-1 transition-colors hover:border-sky-500/50 hover:text-sky-200"
+            >
+              {profile.follower_count} followers
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleOpenConnections('following')}
+              className="rounded-full border border-slate-700/80 bg-slate-900/70 px-3 py-1 transition-colors hover:border-sky-500/50 hover:text-sky-200"
+            >
+              {profile.following_count} following
+            </button>
           </div>
         </div>
       </Card>
@@ -248,6 +350,21 @@ const ProfilePage = () => {
                   : prev + 1,
             )
           }
+        />
+      ) : null}
+      {activeConnectionsType ? (
+        <ProfileConnectionsModal
+          isOpen={Boolean(activeConnectionsType)}
+          type={activeConnectionsType}
+          profileName={displayName}
+          items={connectionItems}
+          isLoading={isLoadingConnections}
+          error={connectionsError}
+          onClose={() => {
+            setActiveConnectionsType(null)
+            setConnectionItems([])
+            setConnectionsError(null)
+          }}
         />
       ) : null}
     </div>

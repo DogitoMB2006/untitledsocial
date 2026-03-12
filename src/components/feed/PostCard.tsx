@@ -18,7 +18,10 @@ import ImageGrid from '../media/ImageGrid'
 import ImageModal from '../media/ImageModal'
 import ProfilePreviewModal from '../profile/ProfilePreviewModal'
 import { uploadImages } from '../../lib/storage'
-import { getProfileByUserId, type Profile } from '../../lib/profile'
+import {
+  getProfileWithStatsByUserId,
+  type ProfileWithStats,
+} from '../../lib/profile'
 
 interface PostCardProps {
   post: Post
@@ -51,7 +54,11 @@ const PostCard = ({ post, onDeleted }: PostCardProps) => {
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null)
   const [modalUrls, setModalUrls] = useState<string[] | null>(null)
   const [showProfilePreview, setShowProfilePreview] = useState(false)
-  const [authorProfile, setAuthorProfile] = useState<Profile | null>(null)
+  const [previewProfile, setPreviewProfile] = useState<ProfileWithStats | null>(null)
+  const [profilePreviewFallbackName, setProfilePreviewFallbackName] = useState('User')
+  const [profilePreviewFallbackHandle, setProfilePreviewFallbackHandle] = useState<string | undefined>(
+    undefined,
+  )
   const [isLoadingProfilePreview, setIsLoadingProfilePreview] = useState(false)
   const maxCommentImages = 2
 
@@ -152,17 +159,20 @@ const PostCard = ({ post, onDeleted }: PostCardProps) => {
     }
   }
 
-  const handleOpenProfilePreview = async () => {
+  const handleOpenProfilePreview = async (
+    targetUserId: string,
+    fallbackName: string,
+    fallbackHandle?: string,
+  ) => {
     setShowProfilePreview(true)
-
-    if (authorProfile?.id === post.user_id) {
-      return
-    }
-
+    setProfilePreviewFallbackName(fallbackName)
+    setProfilePreviewFallbackHandle(fallbackHandle)
     setIsLoadingProfilePreview(true)
+    setPreviewProfile((current) => (current?.id === targetUserId ? current : null))
+
     try {
-      const profile = await getProfileByUserId(post.user_id)
-      setAuthorProfile(profile)
+      const profile = await getProfileWithStatsByUserId(targetUserId, user?.id ?? null)
+      setPreviewProfile(profile)
     } finally {
       setIsLoadingProfilePreview(false)
     }
@@ -278,7 +288,18 @@ const PostCard = ({ post, onDeleted }: PostCardProps) => {
         }`}
       >
         <div className="flex gap-2.5 text-[11px]">
-          <div className="mt-0.5 h-7 w-7 rounded-full bg-slate-900 border border-slate-700 flex items-center justify-center text-[9px] text-slate-200 overflow-hidden shrink-0">
+          <button
+            type="button"
+            className="mt-0.5 h-7 w-7 rounded-full bg-slate-900 border border-slate-700 flex items-center justify-center text-[9px] text-slate-200 overflow-hidden shrink-0 transition-colors hover:border-sky-500/60"
+            onClick={() =>
+              void handleOpenProfilePreview(
+                comment.user_id,
+                commentAuthor,
+                comment.profiles?.username,
+              )
+            }
+            aria-label={`Open ${commentAuthor} profile preview`}
+          >
             {comment.profiles?.avatar_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -289,10 +310,20 @@ const PostCard = ({ post, onDeleted }: PostCardProps) => {
             ) : (
               (commentAuthor[0] ?? 'U').toUpperCase()
             )}
-          </div>
+          </button>
           <div className="min-w-0 flex-1 space-y-2">
             <div className="flex items-start gap-2 flex-wrap">
-              <div className="min-w-0">
+              <button
+                type="button"
+                className="min-w-0 rounded-xl -m-1 px-1 py-0.5 text-left transition-colors hover:bg-slate-900/60"
+                onClick={() =>
+                  void handleOpenProfilePreview(
+                    comment.user_id,
+                    commentAuthor,
+                    comment.profiles?.username,
+                  )
+                }
+              >
                 <span className="font-semibold text-slate-100">
                   {commentAuthor}
                 </span>
@@ -301,7 +332,7 @@ const PostCard = ({ post, onDeleted }: PostCardProps) => {
                     {commentHandle}
                   </span>
                 ) : null}
-              </div>
+              </button>
               <span className="ml-auto text-[10px] text-slate-500">
                 {new Date(comment.created_at).toLocaleTimeString()}
               </span>
@@ -447,7 +478,9 @@ const PostCard = ({ post, onDeleted }: PostCardProps) => {
       <div className="flex items-start gap-3">
         <button
           type="button"
-          onClick={handleOpenProfilePreview}
+          onClick={() =>
+            void handleOpenProfilePreview(post.user_id, authorName, post.profiles?.username)
+          }
           className="group mt-0.5 shrink-0 rounded-full"
           aria-label={`Open ${authorName} profile preview`}
         >
@@ -468,7 +501,9 @@ const PostCard = ({ post, onDeleted }: PostCardProps) => {
           <div className="flex items-center justify-between gap-3">
             <button
               type="button"
-              onClick={handleOpenProfilePreview}
+              onClick={() =>
+                void handleOpenProfilePreview(post.user_id, authorName, post.profiles?.username)
+              }
               className="min-w-0 rounded-xl -m-1 px-1 py-0.5 text-left hover:bg-slate-900/40 transition-colors"
             >
               <p className="text-xs font-semibold text-slate-50 truncate hover:text-sky-200 transition-colors">
@@ -877,9 +912,10 @@ const PostCard = ({ post, onDeleted }: PostCardProps) => {
     <ProfilePreviewModal
         isOpen={showProfilePreview}
         isLoading={isLoadingProfilePreview}
-        profile={authorProfile}
-        fallbackName={authorName}
-        fallbackHandle={post.profiles?.username}
+        profile={previewProfile}
+        fallbackName={profilePreviewFallbackName}
+        fallbackHandle={profilePreviewFallbackHandle}
+        onProfileUpdated={setPreviewProfile}
         onClose={() => setShowProfilePreview(false)}
       />
     </Card>
