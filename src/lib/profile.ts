@@ -19,6 +19,13 @@ export interface ProfileWithStats extends Profile {
   is_followed_by_viewer: boolean
 }
 
+export interface ProfileListItem {
+  id: string
+  username: string
+  display_name: string | null
+  avatar_url: string | null
+}
+
 export interface ProfileUpdateInput {
   username?: string
   display_name?: string | null
@@ -163,6 +170,66 @@ export async function getFollowState(viewerId: string | null | undefined, profil
   }
 
   return Boolean(data)
+}
+
+export async function fetchFollowers(profileId: string) {
+  const { data, error } = await supabase
+    .from('follows')
+    .select(
+      'follower:profiles!follows_follower_id_fkey(id, username, display_name, avatar_url)',
+    )
+    .eq('following_id', profileId)
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    // eslint-disable-next-line no-console
+    console.error('[NebulaX] Failed to fetch followers', error)
+    throw error
+  }
+
+  return (data ?? [])
+    .map((row: any) => {
+      const follower = Array.isArray(row.follower) ? row.follower[0] : row.follower
+      if (!follower) return null
+
+      return {
+        id: follower.id as string,
+        username: follower.username as string,
+        display_name: (follower.display_name ?? null) as string | null,
+        avatar_url: (follower.avatar_url ?? null) as string | null,
+      } satisfies ProfileListItem
+    })
+    .filter((profile): profile is ProfileListItem => profile !== null)
+}
+
+export async function fetchFollowing(profileId: string) {
+  const { data, error } = await supabase
+    .from('follows')
+    .select(
+      'following:profiles!follows_following_id_fkey(id, username, display_name, avatar_url)',
+    )
+    .eq('follower_id', profileId)
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    // eslint-disable-next-line no-console
+    console.error('[NebulaX] Failed to fetch following', error)
+    throw error
+  }
+
+  return (data ?? [])
+    .map((row: any) => {
+      const following = Array.isArray(row.following) ? row.following[0] : row.following
+      if (!following) return null
+
+      return {
+        id: following.id as string,
+        username: following.username as string,
+        display_name: (following.display_name ?? null) as string | null,
+        avatar_url: (following.avatar_url ?? null) as string | null,
+      } satisfies ProfileListItem
+    })
+    .filter((profile): profile is ProfileListItem => profile !== null)
 }
 
 async function buildProfileWithStats(profile: Profile, viewerId?: string | null) {

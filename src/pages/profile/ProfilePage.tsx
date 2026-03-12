@@ -5,9 +5,13 @@ import Button from '../../components/ui/Button'
 import PostCard from '../../components/feed/PostCard'
 import ImageGrid from '../../components/media/ImageGrid'
 import ImageModal from '../../components/media/ImageModal'
+import ProfileConnectionsModal from '../../components/profile/ProfileConnectionsModal'
 import { useAuth } from '../../context/AuthContext'
 import {
+  fetchFollowers,
+  fetchFollowing,
   followUser,
+  type ProfileListItem,
   getProfileWithStatsByUsername,
   type ProfileWithStats,
   unfollowUser,
@@ -30,6 +34,10 @@ const ProfilePage = () => {
   const [error, setError] = useState<string | null>(null)
   const [followError, setFollowError] = useState<string | null>(null)
   const [isUpdatingFollowState, setIsUpdatingFollowState] = useState(false)
+  const [activeConnectionsType, setActiveConnectionsType] = useState<'followers' | 'following' | null>(null)
+  const [connectionItems, setConnectionItems] = useState<ProfileListItem[]>([])
+  const [isLoadingConnections, setIsLoadingConnections] = useState(false)
+  const [connectionsError, setConnectionsError] = useState<string | null>(null)
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null)
   const [modalUrls, setModalUrls] = useState<string[] | null>(null)
 
@@ -43,6 +51,9 @@ const ProfilePage = () => {
     setIsLoading(true)
     setError(null)
     setFollowError(null)
+    setActiveConnectionsType(null)
+    setConnectionItems([])
+    setConnectionsError(null)
 
     void (async () => {
       try {
@@ -135,6 +146,27 @@ const ProfilePage = () => {
     }
   }
 
+  const handleOpenConnections = async (type: 'followers' | 'following') => {
+    setActiveConnectionsType(type)
+    setConnectionItems([])
+    setConnectionsError(null)
+    setIsLoadingConnections(true)
+
+    try {
+      const items =
+        type === 'followers'
+          ? await fetchFollowers(profile.id)
+          : await fetchFollowing(profile.id)
+      setConnectionItems(items)
+    } catch (err) {
+      setConnectionsError(
+        err instanceof Error ? err.message : `Failed to load ${type}.`,
+      )
+    } finally {
+      setIsLoadingConnections(false)
+    }
+  }
+
   return (
     <div className="space-y-5">
       <Card className="overflow-hidden">
@@ -208,12 +240,20 @@ const ProfilePage = () => {
             <span className="rounded-full border border-slate-700/80 bg-slate-900/70 px-3 py-1">
               {profile.comment_count} comments
             </span>
-            <span className="rounded-full border border-slate-700/80 bg-slate-900/70 px-3 py-1">
+            <button
+              type="button"
+              onClick={() => void handleOpenConnections('followers')}
+              className="rounded-full border border-slate-700/80 bg-slate-900/70 px-3 py-1 transition-colors hover:border-sky-500/50 hover:text-sky-200"
+            >
               {profile.follower_count} followers
-            </span>
-            <span className="rounded-full border border-slate-700/80 bg-slate-900/70 px-3 py-1">
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleOpenConnections('following')}
+              className="rounded-full border border-slate-700/80 bg-slate-900/70 px-3 py-1 transition-colors hover:border-sky-500/50 hover:text-sky-200"
+            >
               {profile.following_count} following
-            </span>
+            </button>
           </div>
         </div>
       </Card>
@@ -310,6 +350,21 @@ const ProfilePage = () => {
                   : prev + 1,
             )
           }
+        />
+      ) : null}
+      {activeConnectionsType ? (
+        <ProfileConnectionsModal
+          isOpen={Boolean(activeConnectionsType)}
+          type={activeConnectionsType}
+          profileName={displayName}
+          items={connectionItems}
+          isLoading={isLoadingConnections}
+          error={connectionsError}
+          onClose={() => {
+            setActiveConnectionsType(null)
+            setConnectionItems([])
+            setConnectionsError(null)
+          }}
         />
       ) : null}
     </div>
