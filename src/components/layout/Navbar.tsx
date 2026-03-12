@@ -38,8 +38,15 @@ const Navbar = () => {
   const handleProfileClick = () => {
     if (profile?.username) {
       navigate(`/u/${profile.username}`)
-      setIsMenuOpen(false)
+    } else {
+      navigate('/settings/profile')
     }
+    setIsMenuOpen(false)
+  }
+
+  const handleSettingsClick = () => {
+    navigate('/settings/profile')
+    setIsMenuOpen(false)
   }
 
   const handleSignOut = async () => {
@@ -112,6 +119,13 @@ const Navbar = () => {
                   onClick={handleProfileClick}
                 >
                   Profile
+                </button>
+                <button
+                  type="button"
+                  className="w-full px-3 py-2 text-left hover:bg-slate-800/80"
+                  onClick={handleSettingsClick}
+                >
+                  Settings
                 </button>
                 <button
                   type="button"

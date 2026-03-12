@@ -143,6 +143,80 @@ export async function fetchComments(postId: string) {
   })
 }
 
+export async function fetchPostsByUserId(userId: string, limit = 30) {
+  const { data, error } = await supabase
+    .from('posts')
+    .select('id, user_id, content, created_at, image_urls, profiles:profiles!posts_user_id_fkey(username, display_name, avatar_url)')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(limit)
+
+  if (error || !data) {
+    if (error) {
+      // eslint-disable-next-line no-console
+      console.error('[NebulaX] Failed to fetch user posts', error)
+    }
+    return []
+  }
+
+  return data.map((row: any) => {
+    const authors = Array.isArray(row.profiles) ? row.profiles : row.profiles ? [row.profiles] : []
+    const author = authors[0]
+    return {
+      id: row.id as string,
+      user_id: row.user_id as string,
+      content: row.content as string,
+      created_at: row.created_at as string,
+      image_urls: (row.image_urls ?? []) as string[],
+      profiles: author
+        ? {
+            username: author.username as string,
+            display_name: (author.display_name ?? null) as string | null,
+            avatar_url: (author.avatar_url ?? null) as string | null,
+          }
+        : undefined,
+    } satisfies Post
+  })
+}
+
+export async function fetchCommentsByUserId(userId: string, limit = 40) {
+  const { data, error } = await supabase
+    .from('comments')
+    .select('id, post_id, user_id, content, created_at, parent_comment_id, image_urls, profiles(username, display_name, avatar_url)')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(limit)
+
+  if (error || !data) {
+    if (error) {
+      // eslint-disable-next-line no-console
+      console.error('[NebulaX] Failed to fetch user comments', error)
+    }
+    return []
+  }
+
+  return data.map((row: any) => {
+    const authors = Array.isArray(row.profiles) ? row.profiles : row.profiles ? [row.profiles] : []
+    const author = authors[0]
+    return {
+      id: row.id as string,
+      post_id: row.post_id as string,
+      user_id: row.user_id as string,
+      content: row.content as string,
+      created_at: row.created_at as string,
+      parent_comment_id: (row.parent_comment_id ?? null) as string | null,
+      image_urls: (row.image_urls ?? []) as string[],
+      profiles: author
+        ? {
+            username: author.username as string,
+            display_name: (author.display_name ?? null) as string | null,
+            avatar_url: (author.avatar_url ?? null) as string | null,
+          }
+        : undefined,
+    } satisfies Comment
+  })
+}
+
 export async function createComment(
   postId: string,
   userId: string,

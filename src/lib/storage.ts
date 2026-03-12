@@ -2,7 +2,7 @@ import { supabase } from './supabaseClient'
 
 export async function uploadImages(
   files: File[],
-  basePath: 'posts' | 'comments',
+  basePath: 'posts' | 'comments' | 'avatars' | 'banners',
 ): Promise<string[]> {
   const urls: string[] = []
 

@@ -13,7 +13,9 @@ import Button from '../ui/Button'
 import { useAuth } from '../../context/AuthContext'
 import ImageGrid from '../media/ImageGrid'
 import ImageModal from '../media/ImageModal'
+import ProfilePreviewModal from '../profile/ProfilePreviewModal'
 import { uploadImages } from '../../lib/storage'
+import { getProfileByUserId, type Profile } from '../../lib/profile'
 
 interface PostCardProps {
   post: Post
@@ -34,6 +36,9 @@ const PostCard = ({ post, onDeleted }: PostCardProps) => {
   const [replyToCommentId, setReplyToCommentId] = useState<string | null>(null)
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null)
   const [modalUrls, setModalUrls] = useState<string[] | null>(null)
+  const [showProfilePreview, setShowProfilePreview] = useState(false)
+  const [authorProfile, setAuthorProfile] = useState<Profile | null>(null)
+  const [isLoadingProfilePreview, setIsLoadingProfilePreview] = useState(false)
   const maxCommentImages = 2
 
   const authorName = post.profiles?.display_name ?? post.profiles?.username ?? 'User'
@@ -103,11 +108,32 @@ const PostCard = ({ post, onDeleted }: PostCardProps) => {
     }
   }
 
+  const handleOpenProfilePreview = async () => {
+    setShowProfilePreview(true)
+
+    if (authorProfile?.id === post.user_id) {
+      return
+    }
+
+    setIsLoadingProfilePreview(true)
+    try {
+      const profile = await getProfileByUserId(post.user_id)
+      setAuthorProfile(profile)
+    } finally {
+      setIsLoadingProfilePreview(false)
+    }
+  }
+
   return (
     <Card className="p-4 space-y-3 border-slate-800/90 hover:border-sky-500/60 hover:shadow-sky-700/40 transition-all">
       <div className="flex items-start gap-3">
-        <div className="relative mt-0.5">
-          <div className="h-9 w-9 rounded-full bg-slate-900 border border-slate-700 flex items-center justify-center text-[10px] font-semibold text-slate-100 overflow-hidden">
+        <button
+          type="button"
+          onClick={handleOpenProfilePreview}
+          className="group mt-0.5 shrink-0 rounded-full"
+          aria-label={`Open ${authorName} profile preview`}
+        >
+          <div className="h-9 w-9 rounded-full bg-slate-900 border border-slate-700 group-hover:border-sky-500/60 flex items-center justify-center text-[10px] font-semibold text-slate-100 overflow-hidden transition-colors">
             {post.profiles?.avatar_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -119,42 +145,27 @@ const PostCard = ({ post, onDeleted }: PostCardProps) => {
               (authorName[0] ?? 'U').toUpperCase()
             )}
           </div>
-        </div>
+        </button>
         <div className="flex-1 space-y-1.5">
           <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-xs font-semibold text-slate-50 truncate">
+            <button
+              type="button"
+              onClick={handleOpenProfilePreview}
+              className="min-w-0 rounded-xl -m-1 px-1 py-0.5 text-left hover:bg-slate-900/40 transition-colors"
+            >
+              <p className="text-xs font-semibold text-slate-50 truncate hover:text-sky-200 transition-colors">
                 {authorName}
               </p>
               {handle ? (
-                <p className="text-[10px] text-slate-500 truncate">
+                <p className="text-[10px] text-slate-500 truncate hover:text-slate-300 transition-colors">
                   {handle}
                 </p>
               ) : null}
-            </div>
+            </button>
             <div className="flex items-center gap-2 shrink-0">
               <p className="text-[10px] text-slate-500">
                 {new Date(post.created_at).toLocaleTimeString()}
               </p>
-              {user?.id === post.user_id ? (
-                <button
-                  type="button"
-                  onClick={async () => {
-                    try {
-                      await deletePost(post.id, user.id)
-                      onDeleted?.(post.id)
-                    } catch (err) {
-                      const message =
-                        err instanceof Error ? err.message : 'Failed to delete post.'
-                      setError(message)
-                    }
-                  }}
-                  className="h-5 w-5 rounded-full border border-slate-700 text-[10px] text-slate-400 hover:border-red-500 hover:text-red-400 flex items-center justify-center transition-colors"
-                  aria-label="Delete post"
-                >
-                  ×
-                </button>
-              ) : null}
             </div>
           </div>
           <p className="text-sm text-slate-100 whitespace-pre-wrap">
@@ -170,6 +181,25 @@ const PostCard = ({ post, onDeleted }: PostCardProps) => {
             />
           ) : null}
         </div>
+        {user?.id === post.user_id ? (
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                await deletePost(post.id, user.id)
+                onDeleted?.(post.id)
+              } catch (err) {
+                const message =
+                  err instanceof Error ? err.message : 'Failed to delete post.'
+                setError(message)
+              }
+            }}
+            className="mt-1 h-5 w-5 rounded-full border border-slate-700 text-[10px] text-slate-400 hover:border-red-500 hover:text-red-400 flex items-center justify-center transition-colors shrink-0"
+            aria-label="Delete post"
+          >
+            ×
+          </button>
+        ) : null}
       </div>
 
       <div className="flex items-center justify-between pt-1 text-[11px] text-slate-400">
@@ -462,6 +492,14 @@ const PostCard = ({ post, onDeleted }: PostCardProps) => {
           }
         />
       ) : null}
+      <ProfilePreviewModal
+        isOpen={showProfilePreview}
+        isLoading={isLoadingProfilePreview}
+        profile={authorProfile}
+        fallbackName={authorName}
+        fallbackHandle={post.profiles?.username}
+        onClose={() => setShowProfilePreview(false)}
+      />
     </Card>
   )
 }
