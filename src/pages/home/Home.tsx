@@ -1,11 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Button from '../../components/ui/Button'
 import Card from '../../components/ui/Card'
 import SectionTitle from '../../components/ui/SectionTitle'
 import { useAuth } from '../../context/AuthContext'
-import { createPost, fetchRecentPosts, type Post } from '../../lib/posts'
-import { uploadImages } from '../../lib/storage'
+import { fetchRecentPosts, type Post } from '../../lib/posts'
 import PostCard from '../../components/feed/PostCard'
 
 const marketingHome = () => (
@@ -104,15 +103,9 @@ const marketingHome = () => (
 const Home = () => {
   const { user } = useAuth()
 
-  const [content, setContent] = useState('')
-  const [files, setFiles] = useState<File[]>([])
-  const [spoileredIndices, setSpoileredIndices] = useState<Set<number>>(new Set())
   const [posts, setPosts] = useState<Post[]>([])
   const [isLoadingPosts, setIsLoadingPosts] = useState(false)
-  const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const fileInputRef = useRef<HTMLInputElement | null>(null)
-  const maxPostImages = 4
 
   useEffect(() => {
     if (!user) return
@@ -133,49 +126,17 @@ const Home = () => {
     })()
   }, [user])
 
-  const handlePost = async () => {
-    if (!user || isSubmitting) return
-    const trimmed = content.trim()
-    if (!trimmed) return
-    if (trimmed.length > 280) return
-
-    setIsSubmitting(true)
-    try {
-      let imageUrls: string[] = []
-      if (files.length > 0) {
-        const uploadedUrls = await uploadImages(files, 'posts')
-        imageUrls = uploadedUrls.map((url, index) => 
-          spoileredIndices.has(index) ? `${url}?spoiler=true` : url
-        )
-      }
-
-      const newPost = await createPost(user.id, trimmed, imageUrls)
-      setPosts((current) => [newPost, ...current])
-      setContent('')
-      setFiles([])
-      setSpoileredIndices(new Set())
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : 'Failed to create post.'
-      setError(message)
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
-
-  const handlePaste = (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    const items = event.clipboardData.items
-    const newFiles: File[] = []
-    for (let i = 0; i < items.length; i++) {
-      if (items[i].type.startsWith('image/')) {
-        const file = items[i].getAsFile()
-        if (file) newFiles.push(file)
+  useEffect(() => {
+    const handlePostCreated = (event: Event) => {
+      const customEvent = event as CustomEvent<Post>
+      if (customEvent.detail) {
+        setPosts((current) => [customEvent.detail, ...current])
       }
     }
-    if (newFiles.length > 0) {
-      setFiles((prev) => [...prev, ...newFiles].slice(0, maxPostImages))
-    }
-  }
+    
+    window.addEventListener('post-created', handlePostCreated)
+    return () => window.removeEventListener('post-created', handlePostCreated)
+  }, [])
 
   if (!user) {
     return marketingHome()
@@ -183,133 +144,25 @@ const Home = () => {
 
   return (
     <div className="space-y-8">
-      <Card className="p-4 space-y-3">
-        <p className="text-sm font-semibold text-slate-50">
-          Share something with your Nebula.
-        </p>
-        {error ? (
-          <p className="text-[11px] text-red-400">
-            {error}
-          </p>
-        ) : null}
-        <textarea
-          value={content}
-          onChange={(event) => setContent(event.target.value)}
-          onPaste={handlePaste}
-          placeholder="What&apos;s on your mind?"
-          className="w-full resize-none rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2 text-sm text-slate-50 placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
-          rows={3}
-        />
-        <div className="space-y-2 text-[11px] text-slate-500">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-700 bg-slate-900/70 text-sky-300 hover:border-sky-500 hover:text-sky-200 transition-colors"
-                aria-label="Add images"
-              >
-                +
-              </button>
-              <span className="hidden sm:inline text-slate-400">
-                {files.length}/{maxPostImages} images
-              </span>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                multiple
-                className="hidden"
-                onChange={(event) => {
-                  const selected = Array.from(event.target.files ?? [])
-                  const next = [...files, ...selected].slice(0, maxPostImages)
-                  setFiles(next)
-                }}
-              />
-            </div>
-            <span>{content.length}/280</span>
-          </div>
-          {files.length > 0 ? (
-            <div className="flex gap-2 overflow-x-auto pb-1 mt-2">
-              {files.map((file, index) => {
-                const url = URL.createObjectURL(file)
-                const isSpoiler = spoileredIndices.has(index)
-                return (
-                  <div
-                    key={`${file.name}-${index}`}
-                    className="group relative h-20 w-20 shrink-0 rounded-xl overflow-hidden border border-slate-700/80 bg-slate-900/70"
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={url}
-                      alt={file.name}
-                      className={`h-full w-full object-cover transition-all ${isSpoiler ? 'blur-md brightness-50' : ''}`}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSpoileredIndices(prev => {
-                          const next = new Set(prev)
-                          if (next.has(index)) next.delete(index)
-                          else next.add(index)
-                          return next
-                        })
-                      }}
-                      className={`absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-semibold ${isSpoiler ? 'text-red-400 opacity-100 bg-black/60' : 'text-slate-200'}`}
-                    >
-                      {isSpoiler ? 'Spoiler On' : '+ Spoiler'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setFiles(prev => prev.filter((_, i) => i !== index))
-                        setSpoileredIndices(prev => {
-                          const next = new Set<number>()
-                          // Re-map indices since we removed one
-                          Array.from(prev).forEach(idx => {
-                            if (idx < index) next.add(idx)
-                            if (idx > index) next.add(idx - 1)
-                          })
-                          return next
-                        })
-                      }}
-                      className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/60 text-slate-200 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500 hover:text-white"
-                    >
-                      ×
-                    </button>
-                  </div>
-                )
-              })}
-            </div>
-          ) : null}
-          <div className="flex items-center justify-between">
-            <span className="sm:hidden">
-              {files.length}/{maxPostImages} images
-            </span>
-            <Button
-              size="sm"
-              onClick={handlePost}
-              disabled={
-                !content.trim() ||
-                content.length > 280 ||
-                files.length > maxPostImages ||
-                isSubmitting
-              }
-            >
-              {isSubmitting ? 'Posting...' : 'Post'}
-            </Button>
-          </div>
-        </div>
-      </Card>
+      {error && (
+        <Card className="p-4 bg-red-500/10 border-red-500/20 text-red-400 text-sm">
+          {error}
+        </Card>
+      )}
 
       {isLoadingPosts ? (
         <Card className="p-6 text-sm text-slate-400 text-center">
           Loading posts…
         </Card>
       ) : posts.length === 0 ? (
-        <Card className="p-6 text-sm text-slate-400 text-center">
-          No posts yet. Be the first to post something.
-        </Card>
+        <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
+          <div className="h-16 w-16 rounded-full bg-slate-900 flex items-center justify-center border border-slate-800">
+            <span className="text-2xl">✨</span>
+          </div>
+          <p className="text-slate-400 text-sm max-w-sm">
+            Your universe is empty. Be the first to post something and start building your Nebula.
+          </p>
+        </div>
       ) : (
         <div className="space-y-3">
           {posts.map((post) => (

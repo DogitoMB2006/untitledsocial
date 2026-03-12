@@ -4,14 +4,17 @@ import Footer from './Footer'
 
 const AppLayout = () => {
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-50 flex flex-col">
+    <div className="min-h-screen bg-slate-950 text-slate-50 flex">
+      {/* Side Navbar */}
       <Navbar />
-      <main className="flex-1">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      
+      {/* Main Content Area */}
+      <main className="flex-1 min-w-0 flex flex-col h-screen overflow-y-auto">
+        <div className="max-w-4xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 flex-1">
           <Outlet />
         </div>
+        <Footer />
       </main>
-      <Footer />
     </div>
   )
 }
