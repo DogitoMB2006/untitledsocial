@@ -5,6 +5,10 @@
     color-scheme: dark;
   }
 
+  html.light {
+    color-scheme: light;
+  }
+
   html,
   body,
   #root {
@@ -14,27 +18,42 @@
   body {
     @apply bg-slate-950 text-slate-50 antialiased;
   }
+
+  html.light body {
+    @apply bg-slate-50 text-slate-900;
+  }
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes zoomIn {
-  from { 
+  from {
     opacity: 0;
-    transform: scale(0.95); 
+    transform: scale(0.95);
   }
-  to { 
+
+  to {
     opacity: 1;
-    transform: scale(1); 
+    transform: scale(1);
   }
 }
 
 @keyframes toastShrink {
-  from { transform: translateX(0); }
-  to { transform: translateX(-100%); }
+  from {
+    transform: translateX(0);
+  }
+
+  to {
+    transform: translateX(-100%);
+  }
 }
 
 .Toastify__toast-container {

@@ -6,6 +6,7 @@ import Register from './pages/auth/Register'
 import RequireAuth from './components/auth/RequireAuth'
 import ProfilePage from './pages/profile/ProfilePage'
 import ProfileSettingsPage from './pages/settings/ProfileSettingsPage'
+import MessagesPage from './pages/messages/MessagesPage'
 
 export const router = createBrowserRouter([
   {
@@ -35,6 +36,10 @@ export const router = createBrowserRouter([
             <ProfileSettingsPage />
           </RequireAuth>
         ),
+      },
+      {
+        path: 'messages',
+        element: <MessagesPage />,
       },
     ],
   },

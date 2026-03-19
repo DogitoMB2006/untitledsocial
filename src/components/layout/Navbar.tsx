@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
-import { Home, MessageSquare, Settings, PlusSquare, LogOut, Bell } from 'lucide-react'
+import { Home, MessageSquare, Settings, PlusSquare, LogOut, Bell, Moon, Sun } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { getProfileByUserId, type Profile } from '../../lib/profile'
 import { useNotifications } from '../../context/NotificationsContext'
+import { useTheme } from '../../context/ThemeContext'
+import clsx from 'clsx'
 import { getNotificationHref, type AppNotification } from '../../lib/notifications'
 import Button from '../ui/Button'
 import CreatePostModal from '../post/CreatePostModal'
@@ -11,6 +13,7 @@ import NotificationsInboxModal from '../notifications/NotificationsInboxModal'
 
 const Navbar = () => {
   const { user, signOut } = useAuth()
+  const { theme, toggleTheme } = useTheme()
   const {
     browserPermission,
     isLoading: isLoadingNotifications,
@@ -24,6 +27,14 @@ const Navbar = () => {
   const [isPostModalOpen, setIsPostModalOpen] = useState(false)
   const [isInboxOpen, setIsInboxOpen] = useState(false)
   const navigate = useNavigate()
+
+  const isDark = theme === 'dark'
+  const bgMain = isDark ? 'bg-slate-950/90' : 'bg-white/90'
+  const borderColor = isDark ? 'border-slate-800/60' : 'border-slate-200'
+  const hoverBg = isDark ? 'hover:bg-slate-800/60' : 'hover:bg-slate-100'
+  const textPrimary = isDark ? 'text-slate-50' : 'text-slate-900'
+  const textSecondary = isDark ? 'text-slate-300' : 'text-slate-600'
+  const textMuted = isDark ? 'text-slate-400' : 'text-slate-500'
 
   useEffect(() => {
     let isMounted = true
@@ -74,8 +85,12 @@ const Navbar = () => {
 
   const NavItem = ({ to, icon: Icon, label, onClick, isActive }: { to?: string; icon: any; label: string; onClick?: () => void; isActive?: boolean }) => {
     const content = (
-      <div className={`flex items-center gap-4 rounded-xl p-3 transition-all duration-300 w-full hover:bg-slate-800/60 ${isActive ? 'text-sky-400 font-semibold' : 'text-slate-300 hover:text-slate-50'}`}>
-        <Icon className={`w-6 h-6 shrink-0 transition-transform group-hover:scale-105 ${isActive ? 'text-sky-400' : ''}`} />
+      <div className={clsx(
+        'flex items-center gap-4 rounded-xl p-3 transition-all duration-300 w-full',
+        hoverBg,
+        isActive ? 'text-sky-400 font-semibold' : `${textSecondary} hover:${textPrimary}`
+      )}>
+        <Icon className={clsx('w-6 h-6 shrink-0 transition-transform group-hover:scale-105', isActive ? 'text-sky-400' : '')} />
         <span className="hidden group-hover:inline-block opacity-0 group-hover:opacity-100 whitespace-nowrap transition-opacity duration-300 delay-75">
           {label}
         </span>
@@ -93,8 +108,12 @@ const Navbar = () => {
     return (
       <NavLink to={to!} className="w-full outline-none">
         {({ isActive: isCurrent }) => (
-          <div className={`flex items-center gap-4 rounded-xl p-3 transition-all w-full hover:bg-slate-800/60 ${isCurrent ? 'text-sky-400 font-bold' : 'text-slate-300 hover:text-slate-50'}`}>
-            <Icon className={`w-6 h-6 shrink-0 transition-transform group-hover:scale-105 ${isCurrent ? 'text-sky-400' : ''}`} />
+          <div className={clsx(
+            'flex items-center gap-4 rounded-xl p-3 transition-all w-full',
+            hoverBg,
+            isCurrent ? 'text-sky-400 font-bold' : `${textSecondary} hover:${textPrimary}`
+          )}>
+            <Icon className={clsx('w-6 h-6 shrink-0 transition-transform group-hover:scale-105', isCurrent ? 'text-sky-400' : '')} />
             <span className="hidden group-hover:inline-block opacity-0 group-hover:opacity-100 whitespace-nowrap transition-opacity duration-300 delay-75">
               {label}
             </span>
@@ -106,24 +125,36 @@ const Navbar = () => {
 
   return (
     <>
-      <aside className="group sticky top-0 left-0 z-50 flex h-screen w-20 flex-col items-center border-r border-slate-800/60 bg-slate-950/90 backdrop-blur-xl px-2 py-6 transition-all duration-300 hover:w-64 hover:items-start md:w-20 lg:w-20">
-        
+      <aside className={clsx(
+        'group sticky top-0 left-0 z-50 flex h-screen w-20 flex-col items-center border-r backdrop-blur-xl px-2 py-6 transition-all duration-300 hover:w-64 hover:items-start md:w-20 lg:w-20',
+        borderColor, bgMain
+      )}>
+
         {/* Logo / Profile - Top Location */}
         <div className="flex w-full flex-col items-center group-hover:items-start px-2 mb-10">
           {!user ? (
             <Link to="/" className="flex items-center gap-4 outline-none">
               <img src="/orbyt-logo.png" alt="Nebula" className="h-10 w-10 shrink-0 object-contain rounded-xl" />
-              <span className="hidden group-hover:inline-block text-xl font-bold tracking-tight text-white transition-opacity duration-300 mt-2">
+              <span className={clsx(
+                'hidden group-hover:inline-block text-xl font-bold tracking-tight transition-opacity duration-300 mt-2',
+                textPrimary
+              )}>
                 Nebula
               </span>
             </Link>
           ) : (
-            <button 
-              type="button" 
+            <button
+              type="button"
               onClick={handleProfileClick}
-              className="group/profile flex items-center gap-4 w-full cursor-pointer outline-none rounded-2xl p-2 transition-all hover:bg-slate-800/50"
+              className={clsx(
+                'group/profile flex items-center gap-4 w-full cursor-pointer outline-none rounded-2xl p-2 transition-all',
+                hoverBg
+              )}
             >
-              <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full border border-slate-700 bg-slate-800 transition-transform group-hover/profile:scale-105 shadow-md">
+              <div className={clsx(
+                'h-10 w-10 shrink-0 overflow-hidden rounded-full transition-transform group-hover/profile:scale-105 shadow-md',
+                isDark ? 'border border-slate-700 bg-slate-800' : 'border border-slate-200 bg-slate-100'
+              )}>
                 {profile?.avatar_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -138,10 +169,10 @@ const Navbar = () => {
                 )}
               </div>
               <div className="hidden group-hover:flex flex-col text-left opacity-0 group-hover:opacity-100 transition-opacity duration-300 min-w-0 flex-1">
-                <span className="text-sm font-bold text-slate-100 truncate">
+                <span className={clsx('text-sm font-bold truncate', textPrimary)}>
                   {profile?.display_name || profile?.username || 'User'}
                 </span>
-                <span className="text-xs text-slate-400 truncate">
+                <span className={clsx('text-xs truncate', textMuted)}>
                   {profile?.username ? `@${profile.username}` : user.email}
                 </span>
               </div>
@@ -155,7 +186,7 @@ const Navbar = () => {
             <div className="flex flex-col gap-4 mt-10">
               <NavLink to="/login" className="w-full">
                 {({ isActive }) => (
-                  <Button variant={isActive ? 'primary' : 'ghost'} className={`w-full ${isActive ? '' : 'group-hover:bg-slate-800'}`}>
+                  <Button variant={isActive ? 'primary' : 'ghost'} className={clsx('w-full', !isActive && 'group-hover:bg-slate-800')}>
                     <span className="group-hover:hidden">Log</span>
                     <span className="hidden group-hover:inline">Login</span>
                   </Button>
@@ -163,7 +194,7 @@ const Navbar = () => {
               </NavLink>
               <NavLink to="/register" className="w-full">
                 {({ isActive }) => (
-                  <Button variant={isActive ? 'primary' : 'outline'} className={`w-full border-sky-500/30 ${isActive ? '' : 'group-hover:bg-slate-800'}`}>
+                  <Button variant={isActive ? 'primary' : 'outline'} className={clsx('w-full border-sky-500/30', !isActive && 'group-hover:bg-slate-800')}>
                     <span className="group-hover:hidden">Reg</span>
                     <span className="hidden group-hover:inline">Register</span>
                   </Button>
@@ -178,7 +209,10 @@ const Navbar = () => {
                 onClick={() => setIsInboxOpen(true)}
                 className="relative w-full text-left outline-none"
               >
-                <div className="flex items-center gap-4 rounded-xl p-3 transition-all duration-300 w-full text-slate-300 hover:bg-slate-800/60 hover:text-slate-50">
+                <div className={clsx(
+                  'flex items-center gap-4 rounded-xl p-3 transition-all duration-300 w-full',
+                  hoverBg, textSecondary, `hover:${textPrimary}`
+                )}>
                   <div className="relative shrink-0">
                     <Bell className="h-6 w-6 transition-transform group-hover:scale-105" />
                     {unreadCount > 0 ? (
@@ -216,7 +250,29 @@ const Navbar = () => {
 
         {/* Bottom Actions */}
         {user && (
-          <div className="w-full px-2 mt-auto pt-4 border-t border-slate-800/50">
+          <div className={clsx('w-full px-2 mt-auto pt-4 border-t flex flex-col gap-2', isDark ? 'border-slate-800/50' : 'border-slate-200')}>
+            {/* Theme Toggle */}
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className={clsx(
+                'flex items-center gap-4 rounded-xl p-3 transition-all duration-300 w-full outline-none',
+                hoverBg, textSecondary, `hover:${textPrimary}`
+              )}
+              title={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+            >
+              <div className="relative shrink-0">
+                {theme === 'dark' ? (
+                  <Sun className="w-6 h-6 text-amber-400 transition-transform hover:rotate-45" />
+                ) : (
+                  <Moon className="w-6 h-6 text-sky-400 transition-transform hover:-rotate-12" />
+                )}
+              </div>
+              <span className="hidden group-hover:inline-block opacity-0 group-hover:opacity-100 whitespace-nowrap transition-opacity duration-300 delay-75">
+                {theme === 'dark' ? 'Modo claro' : 'Modo oscuro'}
+              </span>
+            </button>
+
             <NavItem icon={LogOut} label="Log out" onClick={handleSignOut} />
           </div>
         )}

@@ -11,7 +11,6 @@ import { useAuth } from './AuthContext'
 import {
   fetchNotifications,
   formatNotificationTime,
-  getNotificationActorName,
   getNotificationBody,
   getNotificationById,
   getNotificationHref,
@@ -50,7 +49,7 @@ function debugNotificationLog(
   message: string,
   data: Record<string, unknown>,
 ) {
-  fetch('http://127.0.0.1:7936/ingest/72898206-1110-4bbd-a48b-5fe83e56b31e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'edfc10'},body:JSON.stringify({sessionId:'edfc10',runId:'pre-fix',hypothesisId,location,message,data,timestamp:Date.now()})}).catch((error)=>{console.warn('[NebulaX][DebugLog] Failed to write debug log', { hypothesisId, location, error })})
+  fetch('http://127.0.0.1:7936/ingest/72898206-1110-4bbd-a48b-5fe83e56b31e', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'edfc10' }, body: JSON.stringify({ sessionId: 'edfc10', runId: 'pre-fix', hypothesisId, location, message, data, timestamp: Date.now() }) }).catch((error) => { console.warn('[NebulaX][DebugLog] Failed to write debug log', { hypothesisId, location, error }) })
 }
 // #endregion
 
